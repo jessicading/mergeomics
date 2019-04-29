@@ -4,7 +4,7 @@ Integrative Network Analysis of Omics Data
 #### Table of Contents
 1. [About](#about)<br/>
 2. [Tutorial](#tutorial)<br/>
-    1. [Marker Dependency Filtering](marker-dependency-filtering)
+    1. [Marker Dependency Filtering](#marker-dependency-filtering)
     2. [Marker Set Enrichment Analysis](#marker-set-enrichment-analysis)
     3. [Module Merging](#module-merging)
     4. [Weighted Key Driver Analysis](#weighted-key-driver-analysis)
@@ -62,7 +62,7 @@ rs4475691         rs3905286           0.921467
 5. ```NTOP```: Top proportion of associations to consider <br/>
 To increase result robustness and conserve memory and time, it is sometimes useful to limit the number of markers. Use 0.5 as default; Try 0.2 for GWAS with high SNP numbers; Try 1.0 for GWAS with low SNP numbers
 
-### ldprune Script 
+### MDF Script 
 ```bash
 #!/bin/bash
 #
@@ -110,8 +110,8 @@ rs10003931        1.3696e+00
 ## Marker Set Enrichment Analysis
 MSEA detects pathways and networks affected by multidimensional molecular markers (e.g., SNPs, differential methylation sites) associated with a pathological condition. The pipeline can be concluded after MSEA is run, or the results can be used directly in wKDA. 
 ### Inputs
-1.```label```: output file name
-2.```folder```: output folder 
+1.```label```: output file name<br/>
+2.```folder```: output folder <br/>
 3.```genfile``` and ```locfile```: Gene and loci files (respectively) from MDF (see outputs #1 and #2 from MDF section)<br/>
 4. ```modfile```: module/pathway file with headers 'MODULE' and 'GENE'
 ```
@@ -127,8 +127,8 @@ rctm0573           reactome         Inflammasomes
 M5940              biocarta         Endocytotic role of NDK, Phosphins and Dynamin
 Obesity_positive.  GWAS Catalog     Positive control gene set for Obesity 
 ```
-6. ```permtype```: This is critical. For GWAS enrichment analysis, use “gene”
-7. ```nperm```: Set to 2000 for exploratory analysis, set to 10000 for formal analysis
+6. ```permtype```: This is critical. For GWAS enrichment analysis, use “gene”<br/>
+7. ```nperm```: Set to 2000 for exploratory analysis, set to 10000 for formal analysis<br/>
 8. ```maxoverlap```: Default is 0.33. 
 
 ### MSEA Script
