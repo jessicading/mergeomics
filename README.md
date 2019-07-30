@@ -1,5 +1,6 @@
 # Mergeomics
 Integrative Network Analysis of Omics Data
+Developed by: Ville-Petteri Makinen, Le Shu, Yuqi Zhao, Zeyneb Kurt, Bin Zhang, Xia Yang
 
 #### Table of Contents
 1. [About](#about)<br/>
@@ -109,10 +110,13 @@ rs10003931        1.3696e+00
 
 ## Marker Set Enrichment Analysis
 MSEA detects pathways and networks affected by multidimensional molecular markers (e.g., SNPs, differential methylation sites) associated with a pathological condition. The pipeline can be concluded after MSEA is run, or the results can be used directly in wKDA. 
+
+MSEA can also be used for gene level enrichment analysis only (functional annotation of DEGs, transcription factor target enrichment analysis) with different parameter settings. See below.
+
 ### Inputs
 1.```label```: output file name<br/>
 2.```folder```: output folder <br/>
-3.```genfile``` and ```locfile```: Gene and loci files (respectively) from MDF (see outputs #1 and #2 from MDF section)<br/>
+3.```genfile``` and ```locfile```: Gene and loci files (respectively) from MDF (see outputs #1 and #2 from MDF section). For gene level enrichment analysis, a "fake" gene (mapping) file can be made. <br/>
 4. ```modfile```: module/pathway file with headers 'MODULE' and 'GENE'
 ```
 MODULE             GENE
@@ -127,9 +131,9 @@ rctm0573           reactome         Inflammasomes
 M5940              biocarta         Endocytotic role of NDK, Phosphins and Dynamin
 Obesity_positive.  GWAS Catalog     Positive control gene set for Obesity 
 ```
-6. ```permtype```: This is critical. For GWAS enrichment analysis, use “gene”<br/>
+6. ```permtype```: This is critical. For GWAS enrichment analysis, use “gene”. For gene level enrichment analysis, use "locus"<br/>
 7. ```nperm```: Set to 2000 for exploratory analysis, set to 10000 for formal analysis<br/>
-8. ```maxoverlap```: Default is 0.33. 
+8. ```maxoverlap```: Default is 0.33. Set to 1 for gene level enrichment analysis.
 
 ### MSEA Script
 ```R
