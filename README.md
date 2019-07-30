@@ -1,5 +1,5 @@
 # Mergeomics
-Integrative Network Analysis of Omics Data
+Integrative Network Analysis of Omics Data<br/>
 Developed by: Ville-Petteri Makinen, Le Shu, Yuqi Zhao, Zeyneb Kurt, Bin Zhang, Xia Yang
 
 #### Table of Contents
