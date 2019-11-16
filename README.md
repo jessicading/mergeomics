@@ -9,7 +9,6 @@ Developed by: Ville-Petteri Makinen, Le Shu, Yuqi Zhao, Zeyneb Kurt, Bin Zhang, 
     2. [Marker Set Enrichment Analysis](#marker-set-enrichment-analysis)
     3. [Module Merging](#module-merging)
     4. [Weighted Key Driver Analysis](#weighted-key-driver-analysis)
-3. Example Input Files and Output Files 
 
 ## About
 Mergeomics is a an open source software for multi-dimensional integration of omics data to identify disease-associated pathways and networks. Genes whose network neighborhoods are over-represented with disease associated genes are deemed key drivers and can be targeted in further mechanistic studies.
@@ -290,20 +289,14 @@ A1CF		KIAA1958    1
 
 ### wKDA Script
 ```R
-setwd("~/Desktop/Mergeomics/")
-
-netfile= (read.table("bayesian_network.txt", header=T, sep='\t', check.names=F, quote=NULL)) 
-modfile=(read.table("merged_modules.txt", header=T, sep='\t', check.names=F, quote=NULL))
-
 job.kda <- list()
 job.kda$label<-"wKDA"
 job.kda$folder<-"Results" ## parent folder for results
 ## Input a network
 ## columns: TAIL HEAD WEIGHT
 job.kda$netfile<-"bayesian_network.txt"
-
-## Gene sets derived from ModuleMerge, containing two columns, MODULE, 
-## NODE, delimited by tab 
+## Tab delimited text file of gene set containing two columns: MODULE, NODE
+## Outputs from Module Merge script can be directly used
 job.kda$modfile<-"merged_modules.txt"
 
 ## "0" means we do not consider edge weights while 1 is opposite.
@@ -331,3 +324,6 @@ job.kda <- kda.finish(job.kda)
 
 job.kda <- kda2cytoscape(job.kda)
 ```
+
+### Outputs
+If significant key drivers were found, "cytoscape" and "kda" directories are made containing input files for cytoscape and kda results. 
