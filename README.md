@@ -190,7 +190,9 @@ This step merges redundant pathways (pathways with significant sharing of member
 
 The minimum input for this script is a list of modules. If the user does post-analysis of the results file where the significant modules are already extracted, a text file with only one column 'MODULE' is sufficient for this script and the script can easily be modified to allow this. In the script below, lines with "##" are necessary if inputting a list of already filtered modules. Everything after the section "Merge modules before 2nd SSEA" requires only the list of modules. 
 
-The output module file is used as input for wKDA. 
+The output module file can be used as input for wKDA. 
+
+This step is optional. Sigificant modules found from MSEA can be used for wKDA (with MODULE and NODE columns where NODE are the genes).
 
 ### Module Merge Script
 ```R
