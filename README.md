@@ -15,8 +15,8 @@ Mergeomics is a an open source software for multi-dimensional integration of omi
 
 More information can be found in the [paper](https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-016-3198-9), [documentation](http://bioconductor.org/packages/release/bioc/html/Mergeomics.html), and [web server](http://mergeomics.research.idre.ucla.edu).
 
-### Tutorial
-This tutorial describes the workflow for running the Mergeomics pipeline with individual scripts (using Mergeomics functions) and requires a minimum level of coding experience. This method allows for more customization and finetuning of the parameters. This is a response to the webserver and package currently being under construction. 
+## Tutorial
+This tutorial describes the workflow for running the Mergeomics pipeline with individual scripts (using Mergeomics functions) and requires a minimum level of coding experience. This method allows for more customization and finetuning of the parameters. This is a response to the R package currently being under construction. 
 
 For each step, example input and output files are given, the script, and discussion of the parameters.
 
@@ -29,11 +29,11 @@ In previous documentations and tutorials, "MARKER" was used as a column name in 
 
 All scripts need to source "Mergeomics.R"
 
-## Marker Dependency Filtering
+### Marker Dependency Filtering
 
 MDF removes dependent markers and prepares an optimized marker and gene file for marker set enrichment analysis (MSEA). You must have the ldprune software installed for this script. The inputs are enumerated in the scripts as enumerated below. 
 
-### Inputs
+#### Inputs
 1. ```LOCFILE```: Disease/Phenotype Associated Data <br/> 
 This file must have two columns named 'LOCUS' and 'VALUE' where value denotes the association to the trait of interest (p-value). The p-values must be negative log (base 10) transformed (-log P). The higher the value, the stronger the association.
 ```
@@ -62,7 +62,7 @@ rs4475691         rs3905286           0.921467
 5. ```NTOP```: Top proportion of associations to consider <br/>
 To increase result robustness and conserve memory and time, it is sometimes useful to limit the number of markers. Use 0.5 as default; Try 0.2 for GWAS with high SNP numbers; Try 1.0 for GWAS with low SNP numbers
 
-### MDF Script 
+#### MDF Script 
 ```bash
 #!/bin/bash
 #
@@ -90,7 +90,7 @@ nice /u/home/j/jading/project-xyang123/GWAS/MDPRUNE/ldprune /tmp/subset.txt $GEN
 
 ```
 
-### Outputs
+#### Outputs
 These files serve as inputs for MSEA.
 1. Gene file
 ```
@@ -107,12 +107,12 @@ rs1000274	  9.4846e-01
 rs10003931        1.3696e+00
 ```
 
-## Marker Set Enrichment Analysis
-MSEA detects pathways and networks affected by multidimensional molecular markers (e.g., SNPs, differential methylation sites) associated with a pathological condition. The pipeline can be concluded after MSEA is run, or the results can be used directly in wKDA. 
+### Marker Set Enrichment Analysis
+Marker set enrichment analysis (MSEA) detects pathways and networks affected by multidimensional molecular markers (e.g., SNPs, differential methylation sites) associated with a pathological condition. The pipeline can be concluded after MSEA is run, or the results can be used directly in wKDA. 
 
 MSEA can also be used for gene level enrichment analysis only (functional annotation of DEGs, transcription factor target enrichment analysis) with different parameter settings. See below.
 
-### Inputs
+#### Inputs
 1.```label```: output file name<br/>
 2.```folder```: output folder <br/>
 3.```genfile``` and ```locfile```: Gene and loci files (respectively) from MDF (see outputs #1 and #2 from MDF section). For gene level enrichment analysis, a "fake" gene (mapping) file can be made. <br/>
@@ -134,7 +134,7 @@ Obesity_positive.  GWAS Catalog     Positive control gene set for Obesity
 7. ```nperm```: Set to 2000 for exploratory analysis, set to 10000 for formal analysis<br/>
 8. ```maxoverlap```: Default is 0.33. Set to 1 for gene level enrichment analysis.
 
-### MSEA Script
+#### MSEA Script
 ```R
 job.ssea <- list()
 job.ssea$label <- "DIAGRAMstage2_T2D.Adipose_Subcutaneous"
@@ -152,7 +152,7 @@ job.ssea <- ssea.control(job.ssea)
 job.ssea <- ssea.analyze(job.ssea,trim_start=0.005,trim_end=0.995)
 job.ssea <- ssea.finish(job.ssea)
 ```
-### Outputs
+#### Outputs
 1. Details file<br/>
 
 MODULE | FDR | NMARKER | MARKER | VALUE | DESCR
@@ -185,16 +185,16 @@ rctm1372 | 5.71-23| 0 | 36 | 1337 |	1	| 3.084e-21 |	WNT ligand biogenesis and tr
 rctm0476 | 8.22e-25 |	0 |	79 | 1486 |	0.99 | 8.87e-23 | GPCR ligand binding
 rctm0917 | 0.000175 |	0.00031 |	12 | 435 | 1 | 0.0026 | Protein folding
 
-## Module Merging
-This step merges redundant pathways (pathways with significant sharing of member genes) into relatively independent gene sets. The input for this script as exactly written is the results file from MSEA (see output #4 from Marker Set Enrichment Analysis).
+### Module Merging
+This step merges redundant pathways (pathways with significant sharing of member genes) into relatively independent gene sets. The input for this script as exactly written below is the results file from MSEA (see output #4 from Marker Set Enrichment Analysis).
 
 The minimum input for this script is a list of modules. If the user does post-analysis of the results file where the significant modules are already extracted, a text file with only one column 'MODULE' is sufficient for this script and the script can easily be modified to allow this. In the script below, lines with "##" are necessary if inputting a list of already filtered modules. Everything after the section "Merge modules before 2nd SSEA" requires only the list of modules. 
 
 The output module file can be used as input for wKDA. 
 
-This step is optional. Sigificant modules found from MSEA can be used for wKDA (with MODULE and NODE columns where NODE are the genes).
+This step is optional. Sigificant modules found from MSEA can be used for wKDA (with MODULE and NODE columns where NODE contains the genes).
 
-### Module Merge Script
+#### Module Merge Script
 ```R
 plan = c()
 plan$folder = "../msea_results"
@@ -255,7 +255,9 @@ if (length(pool)>0){
 }
 ```
 
-### Outputs
+#### Outputs
+Merged modules with ",.." appended to the module name indicates a "superset" and the member modules are detailed in the "OVERLAP" column.
+
 1. Module file
 ```
 MODULE		GENE	OVERLAP			NODE	
@@ -274,10 +276,10 @@ rctm0693	reactome	Metabolism of proteins
 ```
 
 
-## Weighted Key Driver Analysis 
+### Weighted Key Driver Analysis 
 wKDA selects key regulator genes of the disease related gene sets using gene network topology and edge weight information. wKDA first screens the network for candidate hub genes and then the disease gene-sets are overlaid onto the subnetworks of the candidate hubs to identify key drivers whose neighbors are enriched with disease genes. 
 
-### Inputs
+#### Inputs
 1. Module file from merge modules or a file containing 'MODULE' and 'NODE' columns. See output #1 from Module Merging. 
 
 2. Network file 
@@ -289,7 +291,7 @@ A1CF		KIAA1958    1
 ```
 
 
-### wKDA Script
+#### wKDA Script
 ```R
 job.kda <- list()
 job.kda$label<-"wKDA"
