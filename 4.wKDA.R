@@ -2,9 +2,6 @@ source("../Mergeomics.R")
 
 setwd("~/Desktop/Mergeomics/")
 
-netfile= (read.table("bayesian_network.txt", header=T, sep='\t', check.names=F, quote=NULL)) 
-modfile=(read.table("merged_modules.txt", header=T, sep='\t', check.names=F, quote=NULL))
-
 job.kda <- list()
 job.kda$label<-"wKDA"
 job.kda$folder<-"Results" ## parent folder for results
