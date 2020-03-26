@@ -1,3 +1,6 @@
+# Please excuse the roughness of these functions! I made these a long time ago while I was learning R and I will be making
+# efforts to improve the code hopefully soon.
+
 ## ----------------- DOWNSTREAM ANALYSIS OF MSEA RESULTS FROM MERGEOMICS ----------------- ##
 #                                                                                           #
 # Collection of functions dealing with downstream analysis of MSEA results                  #
@@ -13,7 +16,7 @@
 #     4) summaryTable  - makes table for each SGM method detailing supersets and            #
 #                        comprising modules                                                 #
 #                                                                                           #
-# Written by Jessica Ding, 2019                                                             #
+# Written by Jessica Ding                                                           #
 #                                                                                           #
 # ------------------------------------------------------------------------------------------#
 
