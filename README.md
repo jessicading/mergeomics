@@ -9,9 +9,10 @@ Developed by: Ville-Petteri Makinen, Le Shu, Yuqi Zhao, Zeyneb Kurt, Bin Zhang, 
     2. [Marker Set Enrichment Analysis](#marker-set-enrichment-analysis)
     3. [Module Merging](#module-merging)
     4. [Weighted Key Driver Analysis](#weighted-key-driver-analysis)
+3. [Workflow using wrapper functions](#workflow-using-wrapper-functions)
 
 ## About
-Mergeomics is a an open source software for multi-dimensional integration of omics data to identify disease-associated pathways and networks. Genes whose network neighborhoods are over-represented with disease associated genes are deemed key drivers and can be targeted in further mechanistic studies.
+Mergeomics is an open source R-based pipeline for multi-dimensional integration of omics data to identify disease-associated pathways and networks. Genes whose network neighborhoods are over-represented with disease associated genes are deemed key drivers and can be targeted in further mechanistic studies.
 
 More information can be found in the [paper](https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-016-3198-9), [documentation](http://bioconductor.org/packages/release/bioc/html/Mergeomics.html), and [web server](http://mergeomics.research.idre.ucla.edu).
 
@@ -27,11 +28,13 @@ All files used are tab delimited text files.
 
 In previous documentations and tutorials, "MARKER" was used as a column name in input files, and this tutorial will still describe associations as "markers" but in input and output files, "LOCUS" will take the place of "MARKER". This is because the particular scripts being used as examples here use "LOCUS" and not "MARKER" column names. This can be modified by the user in their own analysis. 
 
-All scripts need to source "Mergeomics.R"
+All scripts except MDF need to source "Mergeomics.R".
 
-### Marker Dependency Filtering
+### Marker Dependency Filtering (MDF)
 
 MDF removes dependent markers and prepares an optimized marker and gene file for marker set enrichment analysis (MSEA). You must have the ldprune software installed for this script. The inputs are enumerated in the scripts as enumerated below. 
+
+As of writing, MDF is done mostly for GWAS data (to correct for linkage disequilibrium). If starting from transcriptomic, proteomic, epigenomic, or metabolomic data, start from MSEA (it is recommended to use the `runMSEA` function to simplify the analysis). 
 
 #### Inputs
 1. ```LOCFILE```: Disease/Phenotype Associated Data <br/> 
@@ -62,7 +65,8 @@ rs4475691         rs3905286           0.921467
 5. ```NTOP```: Top proportion of associations to consider <br/>
 To increase result robustness and conserve memory and time, it is sometimes useful to limit the number of markers. Use 0.5 as default; Try 0.2 for GWAS with high SNP numbers; Try 1.0 for GWAS with low SNP numbers
 
-#### MDF Script 
+#### MDF Script (bash)
+<em>See `runMDF` in Mergeomics_utils.R for a wrapper function of this.</em>
 ```bash
 #!/bin/bash
 #
@@ -107,10 +111,10 @@ rs1000274	  9.4846e-01
 rs10003931        1.3696e+00
 ```
 
-### Marker Set Enrichment Analysis
-Marker set enrichment analysis (MSEA) detects pathways and networks affected by multidimensional molecular markers (e.g., SNPs, differential methylation sites) associated with a pathological condition. The pipeline can be concluded after MSEA is run, or the results can be used directly in wKDA. 
+### Marker Set Enrichment Analysis (MSEA)
+MSEA detects pathways and networks affected by multidimensional molecular markers (e.g., SNPs, differential methylation sites) associated with a pathological condition. The pipeline can be concluded after MSEA is run, or the results can be used directly in wKDA. 
 
-MSEA can also be used for gene level enrichment analysis only (functional annotation of DEGs, transcription factor target enrichment analysis) with different parameter settings. See below.
+MSEA can also be used for gene level enrichment analysis (functional annotation of DEGs, transcription factor target enrichment analysis) with different parameter settings. This is outlined below. Alternatively, you can use the `runMSEA` wrapper function without specifying a mapping_file.
 
 #### Inputs
 1.```label```: output file name<br/>
@@ -134,7 +138,8 @@ Obesity_positive.  GWAS Catalog     Positive control gene set for Obesity
 7. ```nperm```: Set to 2000 for exploratory analysis, set to 10000 for formal analysis<br/>
 8. ```maxoverlap```: Default is 0.33. Set to 1 for gene level enrichment analysis.
 
-#### MSEA Script
+#### MSEA Script (R)
+<em>See `runMSEA` in Mergeomics_utils.R for a wrapper function of this.</em>
 ```R
 job.ssea <- list()
 job.ssea$label <- "DIAGRAMstage2_T2D.Adipose_Subcutaneous"
@@ -194,7 +199,8 @@ The output module file can be used as input for wKDA.
 
 This step is optional. Sigificant modules found from MSEA can be used for wKDA (with MODULE and NODE columns where NODE contains the genes).
 
-#### Module Merge Script
+#### Module Merge Script (R)
+<em>See `merge_modules` in Mergeomics_utils.R for a wrapper function of this.</em>
 ```R
 plan = c()
 plan$folder = "../msea_results"
@@ -248,9 +254,9 @@ if (length(pool)>0){
   write.table(moddatainfo, paste0(plan$folder,"/merged_", mifile),  
               sep='\t', col.names=T, row.names=F, quote=F) 
   
-  #==================================================================# 
-  #    Apply 2nd SSEA with the merged files				             #
-  #==================================================================#
+  #=====================================================================================# 
+  #    Apply 2nd SSEA with the merged file to check that pathways are still significant #
+  #=====================================================================================#
   
 }
 ```
@@ -276,7 +282,7 @@ rctm0693	reactome	Metabolism of proteins
 ```
 
 
-### Weighted Key Driver Analysis 
+### Weighted Key Driver Analysis (wKDA)
 wKDA selects key regulator genes of the disease related gene sets using gene network topology and edge weight information. wKDA first screens the network for candidate hub genes and then the disease gene-sets are overlaid onto the subnetworks of the candidate hubs to identify key drivers whose neighbors are enriched with disease genes. 
 
 #### Inputs
@@ -291,7 +297,8 @@ A1CF		KIAA1958    1
 ```
 
 
-#### wKDA Script
+#### wKDA Script (R)
+<em>See `runKDA` in Mergeomics_utils.R for a wrapper function of this.</em>
 ```R
 job.kda <- list()
 job.kda$label<-"wKDA"
@@ -331,3 +338,59 @@ job.kda <- kda2cytoscape(job.kda)
 
 ### Outputs
 If significant key drivers were found, "cytoscape" and "kda" directories are made containing input files for cytoscape and kda results. 
+
+
+## Workflow using wrapper functions
+
+This functions can be found in Mergeomics_utils.R. The most common values for certain settings are set as default parameters in these wrapper functions. Please review above to see descriptions on these different parameters and they may be tweaked in the following functions. Generally the minimum input is depicted below.
+
+```R
+source("Mergeomics.R")
+source("Mergeomics_utils.R")
+```
+
+### GWAS Enrichment
+
+```R
+runMDF(LOCFILE = "./GWAS/Kunkle_AD.txt",
+       GENFILE = "./mapping/Brain_Hippocampus.eQTL.txt", 
+       LNKFILE = "./linkage/LD50.1000G.CEU.txt", 
+       output_dir = "./MSEA/Data/", # if more than one directory, must create beforehand such as in this case
+       ldprune = "./GWAS/ldprune")
+runMSEA(MDF_output_dir = "./MSEA/Data/Kunkle_AD.Brain_Hippocampus.eQTL/",
+        marker_set="./HP_MSEA_DEGs.txt")
+runKDA(MSEA_results_dir = "./Results/msea/", #contains only one set of results with one "-.results.txt" file
+       marker_set="./HP_MSEA_DEGs.txt",
+       network="./network/brain_network.txt")
+# OR
+runKDA(nodes_file = "./Results/msea/Kunkle_AD.Brain_Hippocampus.eQTL.results.txt",
+       marker_set="./HP_MSEA_DEGs.txt",
+       network="./network/brain_network.txt")
+```
+
+### Transcriptome/Proteome/Epigenome/Metabolome Enrichment
+```R
+runMSEA(association = "./Microglia_DEGs.txt", # has DEGs in LOCUS column and -log10 transformed p values in VALUE column
+        marker_set="./genesets/kbr.mod.txt",
+	info="./genesets/kbr.info.txt") # info not required
+runKDA(MSEA_results_dir = "./Results/msea/Microglia_DEGs.results.txt",
+       marker_set="./genesets/kbr.mod.txt",
+       network="./network/brain_network.txt")
+```
+
+### Run KDA on genes
+```R
+runKDA(nodes_file = "./HP_MSEA_DEGs.txt",
+       network="./network/brain_network.txt")
+```
+
+### Skip MDF for GWAS and run MSEA (not recommended for formal analysis) 
+```R
+runMSEA(association_file = "./GWAS/Kunkle_AD.txt", 
+        perc_top_associations = 0.5,
+        mapping_file = "./mapping/Brain_Hippocampus.eQTL.txt",
+        marker_set="./HP_MSEA_DEGs.txt")
+```
+
+#### Extra notes
+We understand the confusion with 'LOCUS' as the column name as opposed to 'MARKER'. In the scripts and ldprune program provided in this github page, 'LOCUS' needs to be the column name as opposed to 'MARKER'. We hope to change to 'MARKER' soon to reflect that SNP, gene, protein, and metabolite information can be used. To clarify, 'LOCUS' can contain <b>any</b> type of information, though LOCUS implies location in genome (SNP). 
