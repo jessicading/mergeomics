@@ -30,9 +30,9 @@ In previous documentations and tutorials, "MARKER" was used as a column name in 
 
 All scripts except MDF need to source "Mergeomics.R".
 
-### Marker Dependency Filtering (MDF)
+### Marker Dependency Filtering
 
-MDF removes dependent markers and prepares an optimized marker and gene file for marker set enrichment analysis (MSEA). You must have the ldprune software installed for this script. The inputs are enumerated in the scripts as enumerated below. 
+Marker dependency filtering (MDF) removes dependent markers and prepares an optimized marker and gene file for marker set enrichment analysis (MSEA). You must have the ldprune software installed for this script. The inputs are enumerated in the scripts as enumerated below. 
 
 As of writing, MDF is done mostly for GWAS data (to correct for linkage disequilibrium). If starting from transcriptomic, proteomic, epigenomic, or metabolomic data, start from MSEA (it is recommended to use the `runMSEA` function to simplify the analysis). 
 
@@ -111,8 +111,8 @@ rs1000274	  9.4846e-01
 rs10003931        1.3696e+00
 ```
 
-### Marker Set Enrichment Analysis (MSEA)
-MSEA detects pathways and networks affected by multidimensional molecular markers (e.g., SNPs, differential methylation sites) associated with a pathological condition. The pipeline can be concluded after MSEA is run, or the results can be used directly in wKDA. 
+### Marker Set Enrichment Analysis
+Marker set enrichment analysis (MSEA) detects pathways and networks affected by multidimensional molecular markers (e.g., SNPs, differential methylation sites) associated with a pathological condition. The pipeline can be concluded after MSEA is run, or the results can be used directly in wKDA. 
 
 MSEA can also be used for gene level enrichment analysis (functional annotation of DEGs, transcription factor target enrichment analysis) with different parameter settings. This is outlined below. Alternatively, you can use the `runMSEA` wrapper function without specifying a mapping_file.
 
@@ -282,8 +282,8 @@ rctm0693	reactome	Metabolism of proteins
 ```
 
 
-### Weighted Key Driver Analysis (wKDA)
-wKDA selects key regulator genes of the disease related gene sets using gene network topology and edge weight information. wKDA first screens the network for candidate hub genes and then the disease gene-sets are overlaid onto the subnetworks of the candidate hubs to identify key drivers whose neighbors are enriched with disease genes. 
+### Weighted Key Driver Analysis
+Weighted key driver analysis (wKDA) selects key regulator genes of the disease related gene sets using gene network topology and edge weight information. wKDA first screens the network for candidate hub genes and then the disease gene-sets are overlaid onto the subnetworks of the candidate hubs to identify key drivers whose neighbors are enriched with disease genes. 
 
 #### Inputs
 1. Module file from merge modules or a file containing 'MODULE' and 'NODE' columns. See output #1 from Module Merging. 
