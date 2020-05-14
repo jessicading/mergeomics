@@ -1,8 +1,6 @@
-source("Mergeomics.R")
+source("/u/project/xyang123/xyang123-NOBACKUP/jading/Mergeomics.R")
+setwd("/u/flashscratch/j/jading/10X_Single_Cell/AD_HYP/")
 #library(ggplot2) - used for GWAS_MSEA_Screen
-
-# ***Function annotations unfinished! Will be updated. Functions themselves should work. Please
-#    report any issues.
 
 # Marker Dependency Filtering
 # 
@@ -41,6 +39,14 @@ runMDF <-function(LOCFILE,
                   ld_threshold=50,
                   ldprune="ldprune"){
   
+  if(is.null(trait_name) & is.null(mapping_name)){
+    trait_name = unlist(strsplit(LOCFILE,"/"))[length(unlist(strsplit(LOCFILE,"/")))]
+    trait_name = gsub(".txt","",trait_name)
+    
+    mapping_name = unlist(strsplit(GENFILE,"/"))[length(unlist(strsplit(GENFILE,"/")))]
+    mapping_name = gsub(".txt","",mapping_name)
+  }
+  
   bash_file <- file("MDF.bash")
   writeLines(c(paste('LOCFILE="',LOCFILE,'"',sep=''),
                paste('GENFILE="',GENFILE,'"',sep=''),
@@ -58,14 +64,6 @@ runMDF <-function(LOCFILE,
   close(bash_file)
   
   ifelse(!dir.exists(output_dir), dir.create(output_dir),FALSE)
-  
-  if(is.null(trait_name) & is.null(mapping_name)){
-    trait_name = unlist(strsplit(LOCFILE,"/"))[length(unlist(strsplit(LOCFILE,"/")))]
-    trait_name = gsub(".txt","",trait_name)
-    
-    mapping_name = unlist(strsplit(GENFILE,"/"))[length(unlist(strsplit(GENFILE,"/")))]
-    mapping_name = gsub(".txt","",mapping_name)
-  }
   
   label=paste(output_dir,trait_name,'.',mapping_name,sep="")
   ifelse(!dir.exists(label), dir.create(label),FALSE)
@@ -90,10 +88,20 @@ runMDF <-function(LOCFILE,
 # @param info: information for marker_set file 'MODULE' 'SOURCE' 'DESCR'
 # @param permtype: permutation type. automatically set as "locus" when doing gene level 
 #                  enrichment analysis (not from GWAS)
-
+# @param maxoverlap: corresponds to LD threshold used - must be changed if not 50%, 
+#                     used to name output files
+# @param ldprune: path to ldprune program
+#
+# @return creates directory with name that combines trait and mapping information and that 
+#         contains the mapping (-.g.txt) and loci (-.l.txt) file with percent associations
+#         and ld threshold information appended (ex. 50.50.g.txt)
+#
 # @examples
-# runMSEA(MDF_output_dir = "./MSEA/Data/Kunkle_AD.Brain_Hippocampus.eQTL/",
-#         marker_set="./HP_MSEA_DEGs.txt")
+# runMDF(LOCFILE = "./GWAS/Kunkle_AD.txt",
+#        GENFILE = "./mapping/Brain_Hippocampus.eQTL.txt", 
+#        LNKFILE = "./linkage/LD50.1000G.CEU.txt", 
+#        output_dir = "./MSEA/Data/",
+#        ldprune = "./MDPRUNE/ldprune")
 #
 runMSEA <- function(MDF_output_dir = NULL,
                     association_file,
@@ -110,17 +118,18 @@ runMSEA <- function(MDF_output_dir = NULL,
                     perc_top_associations=NULL){
   
   # either gene level enrichment or skipped MDF
-  association_orig = association_file
-  mapping_orig = mapping_file
+  
+  
   if(is.null(MDF_output_dir)){
+    association_orig = association_file
     association <- read.delim(association_file, stringsAsFactors = FALSE)
     association = association[order(association$VALUE, decreasing = TRUE),]
     write.table(association,file = association_file, 
                 row.names = FALSE, quote = FALSE, sep = "\t")
-    if(!is.null(perc_top_associations)){ # if skipped MDF
+    if(!is.null(perc_top_associations)){ # if skipped MDF and doing gwas enrichment
       num = round(nrow(association)*perc_top_associations)
       association = association[1:num,]
-      
+      mapping_orig = mapping_file
       mapping <- read.delim(mapping_file, stringsAsFactors = FALSE)
       association = association[association$LOCUS %in% mapping$LOCUS,]
       
@@ -228,14 +237,14 @@ runKDA <- function(MSEA_results_dir = NULL,
   
   if(!is.null(MSEA_results_dir)){
     results = list.files(MSEA_results_dir, 
-                         full.names = TRUE)[grep(".results.txt",
-                                                 list.files(MSEA_results_dir, 
-                                                            full.names = TRUE))]
+                                  full.names = TRUE)[grep(".results.txt",
+                                                          list.files(MSEA_results_dir, 
+                                                                     full.names = TRUE))]
     if(length(results)>1) cat("Error: More than one MSEA results files detected.\n")
   } else{
     results = nodes_file
   }
-  
+
   
   result <- read.delim(results, stringsAsFactors = FALSE)
   if(ncol(result)>2){
