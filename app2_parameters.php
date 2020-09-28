@@ -132,19 +132,18 @@ i{
 <div class="gridcontainer">
 
   <!-- Description ===================================================== -->
-       <h4 class="instructiontext">
-           This part of the pipeline performs network based drug repositioning (PharmOmics) <br> based on user input genes
-        </h4>
+  <h4 class="instructiontext">
+     This part of the pipeline performs network based drug repositioning (PharmOmics) <br> based on user input genes
+  </h4>
 
 
-        <!--Start app2 Tutorial --------------------------------------->
-           
-     <div style="text-align: center;">
-        <button class="button button-3d button-rounded button" id="myTutButton_app2"><i class="icon-question1"></i>Click for tutorial</button>
-    </div>
+  <!--Start app2 Tutorial --------------------------------------->   
+   <div style="text-align: center;">
+      <button class="button button-3d button-rounded button" id="myTutButton_app2"><i class="icon-question1"></i>Click for tutorial</button>
+   </div>
 
-        <div class='tutorialbox' style="display: none;"></div>
-<!--End app2Tutorial --------------------------------------->
+   <div class='tutorialbox' style="display: none;"></div>
+   <!--End app2Tutorial --------------------------------------->
 
 
 
@@ -156,72 +155,114 @@ i{
 
 <!-- Description ============Start table========================================= -->
 <form enctype="multipart/form-data"  action="app2_parameters.php" name="select" id="app2dataform">
-<div class="table-responsive" style="overflow: visible;"> <!--Make table responsive--->   
- <table class="table table-bordered" style="text-align: center;"; id="app2networktable">
-
-             <thead>
-              <tr>
+  <div class="table-responsive" style="overflow: visible;"> <!--Make table responsive--->   
+    <table class="table table-bordered" style="text-align: center;"; id="app2networktable">
+      <thead>
+        <tr>
 <!--First row of table------------Column Headers------------------------------>
-                <th name="val_app2">Drug Repositioning Analysis</th>
-              </tr>
-            </thead>
-            <tbody>
-            <tr> <!--Second row of table------------------------------------------>
-                             <td name="val1_app2">
-                              <h4 class="instructiontext" style="font-size: 15px;">Select network for drug repositioning analysis</h4>
-                               
+          <th name="val_app2">Drug Repositioning Analysis</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr> <!--Second row of table------------------------------------------>
+          <td name="val1_app2">
+            <h4 class="instructiontext" style="font-size: 15px;">Select or upload network for drug repositioning analysis</h4>
+            <div class="selectholder app2">
+               <select class="btn dropdown-toggle btn-light app2" name="network_select" size="1" id="myNetwork">
+                <option value="0" disabled  <?php if(isset($_POST['network_select']) ? $_POST['network_select'] : null)
+                                                  { echo "";
+                                                  }else{echo "selected"; } ?>>Please select option
+                </option>
+                <option value="1"  <?php if(isset($_POST['network_select']) ? $_POST['network_select'] : null)
+                          {  $a = $_POST['network_select']; 
+                            if($a == 1){echo "selected";}
+                          }else{echo ""; }  ?>>Upload human network file
+                </option>
+                <option value="2"  <?php if(isset($_POST['network_select']) ? $_POST['network_select'] : null)
+                          {  $a = $_POST['network_select']; 
+                            if($a == 2){echo "selected";}
+                          }else{echo ""; }  ?>>Upload mouse network file
+                </option>
+                <option value="3"  <?php if(isset($_POST['network_select']) ? $_POST['network_select'] : null)
+                                          {  $a = $_POST['network_select']; 
+                                            if($a == 3){echo "selected";}
+                                          }else{echo ""; }  ?>>Human Liver Network
+                </option>
+                <option value="4" <?php if(isset($_POST['network_select']) ? $_POST['network_select'] : null)
+                                        {  $a = $_POST['network_select']; 
+                                          if($a == 4){echo "selected";}
+                                        }else{echo ""; }  ?>>Mouse Liver Network
+                </option>
+                </select>
+                <?php
+                  //checks if the USER submitted form and save the MMF data to $sessionID_mapping
+                if(isset( $_POST['network_select'] ))
+                {
+                  if($a==1 or $a==2)
+                  {
+                    if($_FILES['NetworkApp2uploadedfile']['name'] !== "") // if user did upload a file
+                      {
+                        $b = $_FILES['NetworkApp2uploadedfile']['name'];
+                            $txt = "Resources/shinyapp2_temp/".$b."\n";
+                            $test = fopen("./Data/Pipeline/Resources/shinyapp2_temp/$sessionID"."_network", "w");
+                            fwrite($test, $txt);
+                            fclose($test);
+                      }
+                  }
+                  else 
+                  {
+                    //do nothing
+                  }
+                }
+                ?>
+            </div>
 
-                                      
-                                       
-                                        <div class="selectholder app2">
-                                           <select class="btn dropdown-toggle btn-light" name="network_select" size="1" id="myNetwork">
-                                            <option value="0" disabled  <?php if(isset($_POST['network_select']) ? $_POST['network_select'] : null)
-                                                  { echo "";}else{echo "selected"; } ?>>Please select option</option>
-                                            <option value="1"  <?php if(isset($_POST['network_select']) ? $_POST['network_select'] : null)
-                                {  $a = $_POST['network_select']; if($a == 1){echo "selected";}}
-                                else{echo ""; }  ?>>Human Liver Network</option>
-                                            <option value="2" <?php if(isset($_POST['network_select']) ? $_POST['network_select'] : null)
-                                {  $a = $_POST['network_select']; if($a == 2){echo "selected";}}
-                                else{echo ""; }  ?>>Mouse Liver Network</option>
-                                            </select>
-                                          </div>
-                                          
+            <div id="NetApp2upload" style="display: none;"> <!-- Start of upload div--->
+              <div style="color: black;"> Browse and select <strong>TAB</strong> delimited .txt file</div>
+                <div class="input-file-container" name="Network for App2" style="width: fit-content;">
+                  <input class="input-file" id="NetworkApp2uploadInput" name="NetworkApp2uploadedfile" type="file" accept="text/plain" data-show-preview="false">
+                  <label id="NetworkApp2labelname" tabindex="0" class="input-file-trigger"><i class="icon-folder-open"></i> Select a file ...</label>
+                <!--Progress bar ------------------------------>
+                  <div id="NetworkApp2progressbar" class="progress active" style='display: none;'>
+                    <div id="NetworkApp2progresswidth" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%">
+                      <span id="NetworkApp2progresspercent"></span>
+                    </div>
+                  </div>
+                <!--Progress bar ------------------------------>
+                <p id="NetworkApp2filereturn" class="file-return"></p>
+                <span id='NetworkApp2_uploaded_file'></span>
+              </div>
+            </div> <!-- End of upload div--->
+            
+            <!--Div to alert user of certain comment (i.e. success) --> 
+            <div class="alert-app2" id="alert2"></div>     
 
-                                         <h4 class="instructiontext" style="font-size: 15px;">Input target gene you want to test repositioning, separated by <bold>line breaks</bold> <br> All other characters will automatically be removed</h4>
+            <h4 class="instructiontext" style="font-size: 15px;">Input target gene you want to test repositioning, separated by <bold>line breaks</bold> <br> All other characters will automatically be removed
+            </h4>
+            <textarea name="inputgenes" id="dropzone" placeholder="Drop text file(s) or click to manually input genes" required="required"></textarea>
+            <br>
+            <br>
 
-                                            <textarea name="inputgenes" id="dropzone" placeholder="Drop text file(s) or click to manually input genes" required="required"></textarea>
-                                            <br>
-                                            <br>
-
-                                <button id="reset" type="button" class="buttonp"><i class="icon-remove"></i>Clear Fields</button> <button id="samplegenes" type="button" class="buttonp"><i class="icon-plus1"></i>Add sample genes</button>
-
+            <button id="reset" type="button" class="buttonp"><i class="icon-remove"></i>Clear Fields</button> <button id="samplegenes" type="button" class="buttonp"><i class="icon-plus1"></i>Add sample genes</button>
+          </td>
+        </tr>
+      </tbody>
+    </table> 
+  </div>
+</form>    <!--End of app2 form -------------------------------------->
                       
-
-                             </td>
-                            </tr>
-                          </tbody>
-                        </table> 
-
-                      </div>
-
-
-                </form>    <!--End of app2 form -------------------------------------->
-                      
-
-              <h5 style="text-align:center;color: #00004d;">Enter your e-mail id for job completion notification (Optional)
-               <div id="complete_email"></div> 
-              <input type="text" name="email" id="yourEmail">
-    
-             <button type="button" class="button button-3d button-small nomargin" id="emailSubmit"><i class="icon-email"></i>Send email</button>
-      
+<h5 style="text-align:center;color: #00004d;">Enter your e-mail id for job completion notification (Optional)
+  <div id="complete_email"></div> 
+  <input type="text" name="email" id="yourEmail">
+  <button type="button" class="button button-3d button-small nomargin" id="emailSubmit"><i class="icon-email"></i>Send email</button>
 </h5>
 
-<!----------------------------------------End of shinyapp3 maintable -----------------------------------------------> 
+<!----------------------------------------End of shinyapp2 maintable -----------------------------------------------> 
 
 <!-------------------------------------------------Start Review button -----------------------------------------------------> 
-    <div id="Validatediv_app2" style="text-align: center;">
-     <button type="button" class="button button-3d button-large nomargin" id="Validatebutton_app2"><i class="icon-enter"></i>Submit Job</button>      
-          </div>
+<div id="Validatediv_app2" style="text-align: center;">
+  <button type="button" class="button button-3d button-large nomargin" id="Validatebutton_app2"><i class="icon-enter"></i>Submit Job</button>      
+</div>
 <!-------------------------------------------------End Review button -----------------------------------------------------> 
 
 <script>
@@ -247,14 +288,79 @@ $("#emailSubmit").on('click', function() {
 
 });
 
+//NETWORK FILE UPLOAD EVENT HANDLER
+$("#NetworkApp2uploadInput").on("change", function() {
+  $("#NetworkApp2labelname").html("Select another file?");
+  var name = this.files[0].name;
+  var file = this.files[0];
+  var ext = name.split('.').pop().toLowerCase();
+  var fsize = file.size || file.fileSize;
+  if (fsize > 400000000) {
+    alert("File Size is too big");
+    var control = $("#NetworkApp2uploadInput"); //get the id
+    control.replaceWith(control = control.clone().val('')); //replace with clone
+  } else {
+    var fd = new FormData();
+    fd.append("afile", file);
+    fd.append("path", "./Data/Pipeline/Resources/shinyapp2_temp/");
+    fd.append("data_type", "network_app2");
+    fd.append("session_id", session_id);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', 'upload_MAF2.php', true);
+
+    xhr.upload.onprogress = function(e) {
+      if (e.lengthComputable) {
+        $('#NetworkApp2progressbar').show();
+        var percentComplete = (e.loaded / e.total) * 100;
+        $('#NetworkApp2progresswidth').width(percentComplete.toFixed(2) + '%');
+        $('#NetworkApp2progresspercent').html(percentComplete.toFixed(2) + '%');
+      }
+    };
+
+    xhr.onload = function() {
+      if (this.status == 200) {
+        var resp = JSON.parse(this.response);
+        $('#NetworkApp2progresswidth').css('width', '0%').attr('aria-valuenow', 0);
+        $('#NetworkApp2progressbar').hide();
+        if (resp.status == 1) {
+          var fullPath = resp.targetPath;
+          //network_file = fullPath.replace("./Data/Pipeline/", "");
+          var filename = fullPath.replace(/^.*[\\\/]/, "").replace(session_id, "");
+          $('#NetworkApp2filereturn').html(filename);
+          $('#NetworkApp2_uploaded_file').html(`<div class="alert alert-success"><i class="i-rounded i-small icon-check" style="background-color: #2ea92e;top: -5px;"></i><strong>Upload successful!</strong></div>`);
+        } else {
+          $('#NetworkApp2_uploaded_file').html('<div class="alert alert-danger"><i class="icon-remove-sign"></i><strong>Error</strong>' + resp.msg + '</div>');
+          var control = $("#NetworkApp2uploadInput"); //get the id
+          control.replaceWith(control = control.clone().val('')); //replace with clone
+          $("#NetworkApp2filereturn").empty();
+        }
+      };
+    };
+    xhr.send(fd);
+  }
+});
+$("#NetworkApp2labelname").on("keydown", function(event) {
+  if (event.keyCode == 13 || event.keyCode == 32) {
+    $("#NetworkApp2uploadInput").focus();
+  }
+});
+$("#NetworkApp2labelname").on("click", function(event) {
+  $("#NetworkApp2uploadInput").focus();
+  return false;
+});
 
 $("#Validatebutton_app2").on('click', function() {
     var networktype = $("#myNetwork").prop('selectedIndex');
 
     errorlist = [];
 
-    if(networktype == 0)
+    if(networktype == 0){
         errorlist.push('A network database has not been entered!');
+    } else if (networktype == 1 || networktype == 2){
+        if ($("#NetworkApp2uploadInput").nextAll('.file-return').eq(0).text() == '') {
+          errorlist.push($("#NetworkApp2uploadInput").parent().attr('name') + ' is not selected!');
+        }
+    }
 
     if (!$("#dropzone").val()) 
         errorlist.push('No input genes has been entered!');
@@ -344,26 +450,38 @@ function onDrop(evt) {
 
 
 // set up select boxes
-  $('.selectholder.app2').each(function(){
-    $(this).children().hide();
-    var description = $(this).children('select').find(":selected").text();
-    $(this).append('<span class="desc">'+description+'</span>');
-    $(this).append('<span class="pulldown"></span>');
-    // set up dropdown element
-    $(this).append('<div class="selectdropdown"></div>');
-    $(this).children('select').children('option').each(function(){
-      if($(this).attr('value') != '0') {
-        $drop = $(this).parent().siblings('.selectdropdown');
-        var name = $(this).text();
-        $drop.append('<span>'+name+'</span>');
+$('.selectholder.app2').each(function(){
+$(this).children().hide();
+var description = $(this).children('select').find(":selected").text();
+$(this).append('<span class="desc">'+description+'</span>');
+$(this).append('<span class="pulldown"></span>');
+// set up dropdown element
+$(this).append('<div class="selectdropdown"></div>');
+$(this).children('select').children('option').each(function(){
+  if($(this).attr('value') != '0') {
+    $drop = $(this).parent().siblings('.selectdropdown');
+    var name = $(this).text();
+    $drop.append('<span>'+name+'</span>');
+  }
+});
+// on click, show dropdown
+  $(this).click(function(){
+    if($(this).hasClass('activeselectholder')) {
+      // roll up roll up
+      $(this).children('.selectdropdown').slideUp(200);
+      $(this).removeClass('activeselectholder');
+      // change span back to selected option text
+      if($(this).children('select').val() != '0') {
+        $(this).children('.desc').fadeOut(100, function(){
+          $(this).text($(this).siblings("select").find(":selected").text());
+          $(this).fadeIn(100);
+        });
       }
-    });
-    // on click, show dropdown
-    $(this).click(function(){
-      if($(this).hasClass('activeselectholder')) {
-        // roll up roll up
+    }
+    else {
+      // if there are any other open dropdowns, close 'em
+      $('.activeselectholder.app2').each(function(){
         $(this).children('.selectdropdown').slideUp(200);
-        $(this).removeClass('activeselectholder');
         // change span back to selected option text
         if($(this).children('select').val() != '0') {
           $(this).children('.desc').fadeOut(100, function(){
@@ -371,47 +489,105 @@ function onDrop(evt) {
             $(this).fadeIn(100);
           });
         }
+        $(this).removeClass('activeselectholder');
+      });     
+      // roll down
+      $(this).children('.selectdropdown').slideDown(200);
+      $(this).addClass('activeselectholder');
+      // change span to show select box title while open
+      if($(this).children('select').val() != '0') {
+        $(this).children('.desc').fadeOut(100, function(){
+          $(this).text($(this).siblings("select").children("option[value=0]").text());
+          $(this).fadeIn(100);
+        });
       }
-      else {
-        // if there are any other open dropdowns, close 'em
-        $('.activeselectholder.app2').each(function(){
-          $(this).children('.selectdropdown').slideUp(200);
-          // change span back to selected option text
-          if($(this).children('select').val() != '0') {
-            $(this).children('.desc').fadeOut(100, function(){
-              $(this).text($(this).siblings("select").find(":selected").text());
-              $(this).fadeIn(100);
-            });
-          }
-          $(this).removeClass('activeselectholder');
-        });     
-        // roll down
-        $(this).children('.selectdropdown').slideDown(200);
-        $(this).addClass('activeselectholder');
-        // change span to show select box title while open
-        if($(this).children('select').val() != '0') {
-          $(this).children('.desc').fadeOut(100, function(){
-            $(this).text($(this).siblings("select").children("option[value=0]").text());
-            $(this).fadeIn(100);
-          });
-        }
+    }
+  });
+});
+// select dropdown click action
+$('.selectholder.app2 .selectdropdown span').click(function(){
+
+  $(this).siblings().removeClass('active');
+  $(this).addClass('active');
+  var value = $(this).text();
+  $(this).parent().siblings('select').val(value);
+  $(this).parent().siblings('.desc').fadeOut(100, function(){
+    $(this).text(value);
+    $(this).fadeIn(100);
+  });
+  $(this).parent().siblings('select').children('option:contains("'+value+'")').prop('selected', 'selected');
+});
+      //if user clicks somewhere else, it will close the dropdown box.
+$(document).mouseup(function(e) {
+  var container = $(".selectholder.app2");
+
+  // if the target of the click isn't the container nor a descendant of the container
+  if (!container.is(e.target) && container.has(e.target).length === 0) {
+    $('.activeselectholder.app2').each(function() {
+      $(this).children('.selectdropdown').slideUp(200);
+      // change span back to selected option text
+      if ($(this).children('select').val() != '0') {
+        $(this).children('.desc').fadeOut(100, function() {
+          $(this).text($(this).siblings("select").find(":selected").text());
+          $(this).fadeIn(100);
+        });
       }
+      $(this).removeClass('activeselectholder');
     });
-  });
-  // select dropdown click action
-  $('.selectholder.app2 .selectdropdown span').click(function(){
+  }
+});
 
-    $(this).siblings().removeClass('active');
-    $(this).addClass('active');
-    var value = $(this).text();
-    $(this).parent().siblings('select').val(value);
-    $(this).parent().siblings('.desc').fadeOut(100, function(){
-      $(this).text(value);
-      $(this).fadeIn(100);
-    });
-    $(this).parent().siblings('select').children('option:contains("'+value+'")').prop('selected', 'selected');
-  });
+var successalert = '<div class="alert alert-success" style="margin: 20px 10px 0 10px;"><i class="i-rounded i-small icon-check" style="background-color: #2ea92e;margin:0px;"></i><strong>Success!</strong> </div>';
+var uploadalert = `<div class="alert alert-warning">
+                                    <div class="sb-msg">
+                                        <i class="icon-warning-sign"></i> 
+                                        <strong>Maximum File Size:</strong> 400Mb</div>
+                                    <div class="sb-msg">
+                                        <i class="icon-warning-sign"></i>    
+                                        <strong>Accepted file type:</strong> *.txt</div>
+                                    </div>`;
 
+/*$('select.app2').on('change', function() {
+  var select = $(this).find('option:selected').index();
+  console.log("this worked")
+  console.log(select)
+  if (select != 1 || select != 2)
+    $(this).parent().next().hide();
+
+  if (select == 1 || select == 2)
+    $(this).parent().next().show();
+
+  if (select > 2)
+    $(this).parent().nextAll(".alert-app2").eq(0).html(successalert).hide().fadeIn(300);
+  else if (select == 1 || select == 2)
+    $(this).parent().nextAll(".alert-app2").eq(0).html(uploadalert).hide().fadeIn(300);
+  else
+    $(this).parent().nextAll(".alert-app2").eq(0).empty();
+});*/
+
+/*$("#myNetwork").on('change', function() {*/
+$('.selectholder.app2').on('change', '#myNetwork', function() {
+  var select = $(this).find('option:selected').index();
+  console.log("this worked")
+  console.log(select)
+  if (select != 1 || select != 2)
+    $(this).parent().next().hide();
+
+  if (select == 1 || select == 2)
+    $(this).parent().next().show();
+
+  if (select > 2)
+    $(this).parent().nextAll(".alert-app2").eq(0).html(successalert).hide().fadeIn(300);
+  else if (select == 1 || select == 2)
+    $(this).parent().nextAll(".alert-app2").eq(0).html(uploadalert).hide().fadeIn(300);
+  else
+    $(this).parent().nextAll(".alert-app2").eq(0).empty();
+});
+
+
+/*$('select.app2select').each(function() {
+  $(this).trigger('change');
+});*/
 
 
 $("#dropzone").keyup(function(event) {
