@@ -141,6 +141,9 @@ Obesity_positive.  GWAS Catalog     Positive control gene set for Obesity
 #### MSEA Script (R)
 <em>See `runMSEA` in Mergeomics_utils.R for a wrapper function of this.</em>
 ```R
+# source functions or load library
+# library(Mergeomics)
+source("Mergeomics.R")
 job.ssea <- list()
 job.ssea$label <- "DIAGRAMstage2_T2D.Adipose_Subcutaneous"
 job.ssea$folder <- "../results/"
