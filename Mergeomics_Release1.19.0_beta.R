@@ -3326,6 +3326,10 @@ tool.coalesce <- function(items, groups, rcutoff=0.0, ncore=NULL) {
     res <- data.frame(CLUSTER=groups, GROUPS=groups, ITEM=items, 
     stringsAsFactors=FALSE)
     if(rcutoff >= 1.0) return(res)
+    if(length(items)==length(unique(items))){
+        cat("Genes are all unique - no need to merge modules\n")
+        return(res)
+    }
     
     # Check that group names are usable.  
     grlabels <- unique(groups)
