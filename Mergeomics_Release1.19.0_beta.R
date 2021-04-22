@@ -2325,22 +2325,14 @@ ssea.finish.fdr <- function(job, jobs=NULL) {
     
     # Estimate false discovery rates.
     res$FDR <- tool.fdr(res$P)
-    job$results <- res
-    
     # Merge with module info.
     res <- merge(res, job$modinfo, all.x=TRUE)
-    
     # Sort according to significance.
     res <- res[order(res$P),]
+    job$results <- res
     
     # Restore module names.
     res$MODULE <- job$modules[res$MODULE]
-    
-    # Save full results.
-    jdir <- file.path(job$folder, "msea")
-    fname <- paste(job$label, ".results.txt", sep="")
-    names(res)[5] = "NMARKER"
-    tool.save(frame=res, file=fname, directory=jdir)
     
     # Prepare results for post-processing.
     header <- rep("MODULE", 4)
@@ -2391,6 +2383,8 @@ ssea.finish.fdr <- function(job, jobs=NULL) {
             combine_res[,paste0(jobs[[i]]$label,".P")] = p
             combine_res[,paste0(jobs[[i]]$label,".FDR")] = fdr
         }
+        combine_res$META.P = res[,paste("P.", job$label, sep="")]
+        combine_res$META.FDR = res[,paste("FDR.", job$label, sep="")]
         if("DESCR" %in% colnames(res)) combine_res$DESCR = res$DESCR
         fname = paste(job$label, ".combined.results.txt", sep="")
         tool.save(frame=combine_res, file=fname, directory=jdir)
@@ -2404,7 +2398,7 @@ ssea.finish.details <- function(job) {
     
     # Find signficant modules.
     res <- job$results
-    mask <- which(res$FDR < 0.25)
+    mask <- which(res$FDR < 1)
     if(length(mask) < 5) {
         mask <- order(res$P)
         mask <- mask[1:min(5,length(mask))]
@@ -2459,6 +2453,44 @@ ssea.finish.details <- function(job) {
     fname <- paste(job$label, ".details.txt", sep="")
     names(dtl) = c("MODULE","FDR","GENE","NMARKER","MARKER","VALUE","DESCR")
     tool.save(frame=dtl, file=fname, directory=jdir)
+    
+    # Add top five genes, markers, values details to result file
+    # Restore module names.
+    res$MODULE <- job$modules[res$MODULE]
+    res <- job$results
+    res$MODULE <- job$modules[res$MODULE]
+    res$TOPGENES <- ""
+    res$TOPMARKERS <- ""
+    res$TOPVALUES <- ""
+    for(i in 1:length(res$MODULE)){
+        if(res$MODULE[i] %in% dtl$MODULE){
+            if(length(dtl$GENE[dtl$MODULE==res$MODULE[i]])<10){
+                inc <- 1:length(dtl$GENE[dtl$MODULE==res$MODULE[i]])
+            } else{
+                inc <- 1:10
+            }
+            res$TOPGENES[i] <- do.call("paste",
+                                       c(dtl$GENE[dtl$MODULE==res$MODULE[i]][inc], 
+                                         list("sep"=";")))
+            res$TOPMARKERS[i] <- do.call("paste",
+                                         c(dtl$MARKER[dtl$MODULE==res$MODULE[i]][inc], 
+                                           list("sep"=";")))
+            res$TOPVALUES[i] <- do.call("paste",
+                                        c(dtl$VALUE[dtl$MODULE==res$MODULE[i]][inc], 
+                                          list("sep"=";")))
+        } else{
+            res$TOPGENES[i] <- ""
+            res$TOPMARKERS[i] <- ""
+            res$TOPVALUES[i] <- ""
+        }
+    }
+    
+    # Save full results.
+    jdir <- file.path(job$folder, "msea")
+    fname <- paste(job$label, ".results.txt", sep="")
+    names(res)[5] = "NMARKER"
+    tool.save(frame=res, file=fname, directory=jdir)
+    
     return(job)
 }
 #
