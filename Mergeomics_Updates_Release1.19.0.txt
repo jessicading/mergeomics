@@ -15,9 +15,12 @@ Module merging (ssea2kda)
 MSEA for non-GWAS (ssea.start)
 	If user does not provide the genfile (mapping file), then assume the run is non-GWAS (eg., TWAS, PWAS) and create “fake” mapping file and set appropriate parameters
 
-Meta (ssea.finish.fdr)
+Meta output (ssea.finish.fdr)
 	Output summary of significance values across all studies
 
-MSEA to KDA (ssea2kda)
+MSEA to KDA file preparation (ssea2kda)
 	Handling of one or two modules passed to KDA
 	Take out control gene sets
+
+MSEA output (ssea.finish.details and ssea.finish.fdr)
+	Add top markers and top corresponding values to .results.txt output file
