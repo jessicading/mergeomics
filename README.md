@@ -138,7 +138,7 @@ Obesity_positive.  GWAS Catalog     Positive control gene set for Obesity
 7. ```nperm```: Set to 2000 for exploratory analysis, set to 10000 for formal analysis<br/>
 8. ```maxoverlap```: Default is 0.33. Set to 1 for gene level enrichment analysis.
 
-#### MSEA Script (R)
+#### MSEA Script
 <em>See `runMSEA` in Mergeomics_utils.R for a wrapper function of this.</em>
 ```R
 # source functions or load library
@@ -194,82 +194,51 @@ rctm0476 | 8.22e-25 |	0 |	79 | 1486 |	0.99 | 8.87e-23 | GPCR ligand binding
 rctm0917 | 0.000175 |	0.00031 |	12 | 435 | 1 | 0.0026 | Protein folding
 
 ### Module Merging
-This step merges redundant pathways (pathways with significant sharing of member genes) into supersets. The degree of merging can be modified based on the rcutoff (ratio threshold). A recommended rcutoff is 0.33, which means that modules sharing overlap above this ratio will be merged. For more module merging, set the rcutoff lower.
+This optional step merges redundant pathways (pathways with significant sharing of member genes) into supersets (e.g., "Extracellular matrix" and "Cell adhesion" may be merged). The degree of merging can be modified based on the `rmax` (max gene sharing ratio that modules will remain independent). A recommended `rmax` is 0.33, which means that modules sharing overlap above this ratio will be merged. For more module merging, set the `rmax` lower; for less module merging, set the `rmax` higher (stricter ratio cutoff).
 
-The inputs for this script as exactly written below is the results file from MSEA (see output #4 from Marker Set Enrichment Analysis).
+We recommend this step to reduce redundancy in significant modules and to reduce redundancy in input to KDA. When running KDA, the analysis is run on each module in parallel. 
 
-The minimum input for this script is a list of modules. If the user does post-analysis of the results file where the significant modules are already extracted, a text file with only one column 'MODULE' is sufficient for this script and the script can easily be modified to allow this. In the script below, lines with "##" are necessary if inputting a list of already filtered modules. Everything after the section "Merge modules before 2nd SSEA" requires only the list of modules. 
-
-The output module file can be used as input for wKDA. 
-
-This step is optional. Sigificant modules found from MSEA can be used for wKDA (with MODULE and NODE columns where NODE contains the genes).
-
-#### Module Merge Script (R)
-<em>See `merge_modules` in Mergeomics_utils.R for a wrapper function of this.</em>
+#### Method 1: Use `merge_modules` function using result file from MSEA or vector of modules
+This function is in Mergeomics_utils.R.
 ```R
-plan = c()
-plan$folder = "../msea_results"
-plan$label = "DIAGRAMstage1_T2D.Adipose_Subcutaneous" 
-plan$modfile="../resources/genesets/kbr.mod.txt"
-plan$inffile="../resources/genesets/kbr.info.txt"
-#=====================================================
-# first pick the significantly enriched modules for 1st ssea:
-FDR=0.05
-pool=c() ##
-file.name=paste0(plan$folder, "/",plan$label, ".txt") ##
-if(file.exists(file.name)){
-  aa=(read.table(file.name, header=T, sep='\t', check.names=F, quote=NULL)) ##
-  if(length(which(aa[,"MODULE"] == "_ctrlA")) >0) aa=aa[-which(aa[,"MODULE"] == "_ctrlA"),] 
-  if(length(which(aa[,"MODULE"] == "_ctrlB")) >0) aa=aa[-which(aa[,"MODULE"] == "_ctrlB"),] 
-  aa=aa[which( (as.numeric(aa[,"FDR"])< FDR)  ), ] 
-  if (nrow(aa) > 0) pool=unique(c(pool, as.character(aa[,"MODULE"]))) ##
-}
+source("Mergeomics.R")
+source("Mergeomics_utils.R")
+options(stringsAsFactors = FALSE)
 
-#=====================================================
-#=== Merge the modules before 2nd SSEA
-if (length(pool)>0){
-  meg.mods<- tool.read(plan$modfile)
-  merged.modules <- pool
-  moddata <- meg.mods[which(!is.na(match(meg.mods[,1], merged.modules))),]
-  # Merge and trim overlapping modules.
-  rmax <- 0.33
-  moddata$OVERLAP <- moddata$MODULE
-  moddata <- tool.coalesce(items=moddata$GENE, groups=moddata$MODULE, rcutoff=rmax) #, ncore=500)
-  moddata$MODULE <- moddata$CLUSTER
-  moddata$GENE <- moddata$ITEM
-  moddata$OVERLAP <- moddata$GROUPS
-  moddata <- moddata[,c("MODULE", "GENE", "OVERLAP")]
-  moddata <- unique(moddata)
-  
-  moddatainfo <- tool.read(plan$inffile)
-  moddatainfo <- moddatainfo[which(!is.na(match(moddatainfo[,1], moddata[,1]))), ]
-  # Mark modules with overlaps.
-  for(j in which(moddata$MODULE != moddata$OVERLAP)){
-    moddatainfo[which(moddatainfo[,"MODULE"] == moddata[j,"MODULE"]), "MODULE"] <- paste(moddata[j,"MODULE"], "..", sep=",")
-    moddata[j,"MODULE"] <- paste(moddata[j,"MODULE"], "..", sep=",")
-  }
-  # Save module info for 2nd SSEA and KDA.
-  moddata <- unique(moddata)
-  moddata[, 4] <- moddata[, 2];  names(moddata)[4] <- c("NODE")
-  mdfile="modules_canonical_plus_coexm_mods.kbr.txt"; mifile="kbr.modules.info.txt" 
-  
-  write.table(moddata, paste0(plan$folder,"/merged_", mdfile),  
-              sep='\t', col.names=T, row.names=F, quote=F) 
-  
-  write.table(moddatainfo, paste0(plan$folder,"/merged_", mifile),  
-              sep='\t', col.names=T, row.names=F, quote=F) 
-  
-  #=====================================================================================# 
-  #    Apply 2nd SSEA with the merged file to check that pathways are still significant #
-  #=====================================================================================#
-  
-}
+# minimum inputs. msea_res can be a vector of module names or the ".results.txt" result file from MSEA
+merge_modules(msea_res="sample_inputs/Sample_Meta.MSEA_modules_full_result.txt", 
+              modfile_path = "sample_inputs/Kegg1.txt,
+	      fdr_cutoff = 0.01) # not required input but highly recommended for downstream analysis with KDA
+# OR using a vector of modules
+res <- read.delim("sample_inputs/Sample_Meta.MSEA_modules_full_result.txt)
+sig_mods <- res$MODULE[res$FDR<0.01]
+merge_modules(msea_res=sig_mods, 
+              modfile_path = "sample_inputs/Kegg1.txt")
+	      
+# All parameters set
+merge_modules(msea_res="~/Downloads/Meta_MSEA_TTK1A14P1X/Sample_Meta.MSEA_modules_full_result.txt", 
+              rmax = 0.33, # this is the default value
+              modfile_path = "sample_inputs/Kegg1.txt",
+              label = "Psoriasis", 
+	      fdr_cutoff = 0.01, 
+	      output_Dir = "Merged/", 
+              infofile_path = "sample_inputs/KEGG_info.txt")
+
+```
+
+#### Method 2: Use `ssea2kda` function using MSEA job with results
+The job returned from `ssea.finish` is used in the `ssea2kda` function (see MSEA script above).
+```R
+# last step of MSEA
+job.ssea <- ssea.finish(job.ssea)
+# rmax can be adjusted as well
+job.kda <- ssea2kda(job.msea, filter=0.05) # filter is the FDR cutoff
 ```
 
 #### Outputs
-Merged modules with ",.." appended to the module name indicates a "superset" and the member modules are detailed in the "OVERLAP" column.
+Merged modules with ",.." appended to the module name indicates a "superset" and the member modules are detailed in the "OVERLAP" column. This file can be directly used in KDA (KDA nodes input requires "MODULE" and "NODE" columns).
 
-1. Module file
+1. Module file ("merged_...mod.txt" from `merge_modules` or "msea2kda.modules.txt" from `ssea2kda`)
 ```
 MODULE		GENE	OVERLAP			NODE	
 rctm0089,..	CYBA	rctm0089,rctm0246	CYBA
@@ -278,7 +247,7 @@ rctm0693	ACHE	rctm0693		ACHE
 
 ```
 
-2. Info file
+2. Info file (if set infofile_path parameter in `merge_modules` function)
 
 ```
 MODULE		SOURCE		DESCR
