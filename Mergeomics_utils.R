@@ -1,6 +1,5 @@
-source("/u/project/xyang123/xyang123-NOBACKUP/jading/Mergeomics.R")
-setwd("/u/flashscratch/j/jading/10X_Single_Cell/AD_HYP/")
-#library(ggplot2) - used for GWAS_MSEA_Screen
+source("Mergeomics.R")
+library(ggplot2) # used for GWAS_MSEA_Screen
 
 # Marker Dependency Filtering
 # 
@@ -47,7 +46,10 @@ runMDF <-function(LOCFILE,
     mapping_name = gsub(".txt","",mapping_name)
   }
   
-  bash_file <- file("MDF.bash")
+  label=paste(output_dir,trait_name,'.',mapping_name,sep="")
+  ifelse(!dir.exists(label), dir.create(label),FALSE)
+  
+  bash_file <- file(paste0(label,".bash"))
   writeLines(c(paste('LOCFILE="',LOCFILE,'"',sep=''),
                paste('GENFILE="',GENFILE,'"',sep=''),
                paste('LNKFILE="', LNKFILE,'"',sep=""),
@@ -65,11 +67,8 @@ runMDF <-function(LOCFILE,
   
   ifelse(!dir.exists(output_dir), dir.create(output_dir),FALSE)
   
-  label=paste(output_dir,trait_name,'.',mapping_name,sep="")
-  ifelse(!dir.exists(label), dir.create(label),FALSE)
-  
   name=paste(as.character(nmax*100), ld_threshold, sep=".")
-  system("bash MDF.bash")
+  system(paste0("bash ", paste0(label,".bash")))
   system(paste("mv ",label,"/genes.txt ",label,"/",name,".g.txt",sep=""))
   system(paste("mv ",label,"/loci.txt ",label,"/",name,".l.txt",sep=""))
 }
@@ -115,6 +114,7 @@ runMSEA <- function(MDF_output_dir = NULL,
                     nperm=10000,
                     max_module_genes=5000,
                     trim = 0.002,
+                    return_job = FALSE,
                     perc_top_associations=NULL){
   
   # either gene level enrichment or skipped MDF
@@ -195,11 +195,19 @@ runMSEA <- function(MDF_output_dir = NULL,
   
   ifelse(!dir.exists(output_dir), dir.create(output_dir),FALSE)
   
+  ass <- read.delim(association_file, stringsAsFactors = FALSE)
+  colnames(ass) <- c("MARKER","VALUE")
+  write.table(ass, file = association_file, row.names = FALSE, quote = FALSE, sep = "\t")
+  
+  map <- read.delim(mapping_file, stringsAsFactors = FALSE)
+  colnames(map) <- c("GENE","MARKER")
+  write.table(map, file = mapping_file, row.names = FALSE, quote = FALSE, sep = "\t")
+  
   job.ssea <- list()
   job.ssea$label <- label
   job.ssea$folder <- output_dir
   job.ssea$genfile <- mapping_file
-  job.ssea$locfile <- association_file
+  job.ssea$marfile <- association_file #marfile in package, locfile in Mergeomics.R functions
   job.ssea$modfile <- marker_set
   if(!is.null(info)){
     job.ssea$inffile <- info
@@ -214,6 +222,7 @@ runMSEA <- function(MDF_output_dir = NULL,
   job.ssea <- ssea.analyze(job.ssea,trim_start=trim,trim_end=(1-trim))
   job.ssea <- ssea.finish(job.ssea)
   
+  if(return_job) return(job.ssea)
 }
 
 # nodes_file can either be .results.txt file from MSEA or a 'MODULE' 'NODE' file
@@ -229,7 +238,9 @@ runKDA <- function(MSEA_results_dir = NULL,
                    edgefactor = 0,
                    depth = 1,
                    direction = 0,
-                   nperm = 10000
+                   nperm = 10000,
+                   nKDs_show = NULL,
+                   return_job = FALSE
 ){
   
   job.kda <- list()
@@ -247,7 +258,7 @@ runKDA <- function(MSEA_results_dir = NULL,
 
   
   result <- read.delim(results, stringsAsFactors = FALSE)
-  if(ncol(result)>2){
+  if(ncol(result)>4){ # result file from MSEA
     sig_mods = result$MODULE[result$FDR<0.05]
     sig_modfile = data.frame(stringsAsFactors = FALSE)
     
@@ -260,7 +271,13 @@ runKDA <- function(MSEA_results_dir = NULL,
     write.table(sig_modfile, "Significant_module_nodes.txt", row.names = FALSE, quote = FALSE, sep = "\t")
     job.kda$modfile <- "./Significant_module_nodes.txt"
     forMerging = data.frame("MODULE"=unique(sig_modfile$MODULE), stringsAsFactors = FALSE)
-  }else{
+  }
+  else if(ncol(result)==4){ # output from merge modules
+    result <- result[,c("MODULE","NODE")]
+    write.table(result, "nodes_file_forKDA.txt", row.names = FALSE, quote = FALSE, sep = "\t")
+    job.kda$modfile <- "nodes_file_forKDA.txt"
+  }
+  else{
     if(length(intersect(colnames(result),c("MODULE","NODE")))!=2){
       colnames(result) <- c("MODULE","NODE")
       write.table(result, "nodes_file_forKDA.txt", row.names = FALSE, quote = FALSE, sep = "\t")
@@ -341,7 +358,16 @@ runKDA <- function(MSEA_results_dir = NULL,
   job.kda <- kda.analyze(job.kda)
   job.kda <- kda.finish(job.kda)
   
-  job.kda <- kda2cytoscape(job.kda)
+  if(!is.null(nKDs_show)){
+    job.kda <- kda2cytoscape(job.kda, ndrivers = nKDs_show)
+  }
+  else{
+    job.kda <- kda2cytoscape(job.kda)
+  }
+  
+  if(return_job){
+    saveRDS(job.kda, file = paste0(name, "_kda_job.rds"))
+  }
 }
 
 GWAS_MSEA_screen <- function(GWAS_dir="/u/project/xyang123/xyang123-NOBACKUP/icestrik/public_gwas/MSEA_Gtex_v7/",
@@ -355,6 +381,7 @@ GWAS_MSEA_screen <- function(GWAS_dir="/u/project/xyang123/xyang123-NOBACKUP/ice
                              max_module_genes = 5000,
                              trim = .005,
                              nperm = 10000,
+                             permtype = "gene",
                              nGWASshow = 20){
   traits = list.files(GWAS_dir)[grep(SNP_map_method, list.files(GWAS_dir))]
   trim_traits = c()
@@ -380,7 +407,7 @@ GWAS_MSEA_screen <- function(GWAS_dir="/u/project/xyang123/xyang123-NOBACKUP/ice
         if(!is.null(info)){
           job.ssea$inffile <- info
         }
-        job.ssea$permtype <- "gene"	#optional
+        job.ssea$permtype <- permtype	#optional
         job.ssea$maxgenes <- max_module_genes	#optional
         job.ssea$nperm <- nperm	#optional
         job.ssea <- ssea.start(job.ssea)
@@ -438,52 +465,89 @@ GWAS_MSEA_screen <- function(GWAS_dir="/u/project/xyang123/xyang123-NOBACKUP/ice
   write.table(results_df,paste0(output_name,"_data.txt"), row.names = FALSE, quote = FALSE, sep = "\t")
 }
 
-merge_modules <- function(name, modules_df, rcutoff, output_Dir, modfile_path, infofile_path){
-  plan = c()
-  plan$folder = output_Dir
-  plan$label =  name
-  plan$modfile= modfile_path
-  if(!is.null(infofile_path)){
-    plan$inffile= infofile_path
+merge_modules <- function(msea_res, 
+                          rcutoff=0.33, 
+                          fdr_cutoff=NULL,
+                          output_Dir="Merged_modules/", 
+                          modfile_path, 
+                          infofile_path=NULL,
+                          label=""){
+  
+  if(length(msea_res)==1){ # msea result file
+    res <- read.delim(msea_res)
+    if(!is.null(fdr_cutoff)){
+      res <- res[res$FDR<fdr_cutoff,]
+    }
+    pool <- as.character(res[,"MODULE"])
+  } else{ # vector of modules
+    pool=msea_res
   }
-  #=====================================================
-  pool=c()
-  aa = modules_df
-  if (nrow(aa) > 0) pool=unique(c(pool, as.character(aa[,"MODULE"])))
+  pool <- pool[!(pool=="_ctrlA" | pool=="_ctrlB")]
   
   #=====================================================
   #=== Merge the modules before 2nd SSEA
   if (length(pool)>0){
-    meg.mods<- tool.read(plan$modfile)
+    meg.mods<- tool.read(modfile_path)
     merged.modules <- pool
     moddata <- meg.mods[which(!is.na(match(meg.mods[,1], merged.modules))),]
+    all_mod <- moddata
+    
     # Merge and trim overlapping modules.
-    rmax <- rcutoff
     moddata$OVERLAP <- moddata$MODULE
-    moddata <- tool.coalesce(items=moddata$GENE, groups=moddata$MODULE, rcutoff=rmax) #, ncore=500)
+    moddata <- tool.coalesce(items=moddata$GENE, groups=moddata$MODULE, rcutoff=rcutoff)
     moddata$MODULE <- moddata$CLUSTER
     moddata$GENE <- moddata$ITEM
     moddata$OVERLAP <- moddata$GROUPS
     moddata <- moddata[,c("MODULE", "GENE", "OVERLAP")]
     moddata <- unique(moddata)
     
-    moddatainfo <- tool.read(plan$inffile)
-    moddatainfo <- moddatainfo[which(!is.na(match(moddatainfo[,1], moddata[,1]))), ]
+    if(!is.null(infofile_path)){
+      moddatainfo <- tool.read(infofile_path)
+      moddatainfo <- moddatainfo[which(!is.na(match(moddatainfo[,1], moddata[,1]))), ]
+    }
     # Mark modules with overlaps.
     for(j in which(moddata$MODULE != moddata$OVERLAP)){
-      moddatainfo[which(moddatainfo[,"MODULE"] == moddata[j,"MODULE"]), "MODULE"] <- paste(moddata[j,"MODULE"], "..", sep=",")
+      if(!is.null(infofile_path)){
+        moddatainfo[which(moddatainfo[,"MODULE"] == moddata[j,"MODULE"]), "MODULE"] <- paste(moddata[j,"MODULE"], "..", sep=",")
+      }
       moddata[j,"MODULE"] <- paste(moddata[j,"MODULE"], "..", sep=",")
     }
     # Save module info for 2nd SSEA and KDA.
     moddata <- unique(moddata)
     moddata[, 4] <- moddata[, 2];  names(moddata)[4] <- c("NODE")
-    mdfile=paste0(name, ".mod.txt"); mifile=paste0(name, ".info.txt")
+    if(label!="") label <- paste0(label,".")
+    mdfile=paste0(label, "mod.txt"); mifile=paste0(label, "info.txt")
     
-    write.table(moddata, paste0(plan$folder,"merged_", mdfile),  #deleted "/" before "merged"
-                sep='\t', col.names=T, row.names=F, quote=F) 
+    if(length(setdiff(all_mod$GENE, moddata$GENE))>0){
+      addBack <- data.frame("GENE"=unique(setdiff(all_mod$GENE, moddata$GENE)))
+      cat("There were ", nrow(addBack), " genes lost from merging. Adding back...\n")
+      modules <- c()
+      for(gene in addBack$GENE){
+        modules <- c(modules, do.call("paste",c(all_mod$MODULE[all_mod$GENE==gene],
+                                                list("sep"=", "))))
+      }
+      addBack$Module <- modules
+      merged_modules <- unique(moddata$OVERLAP)
+      names(merged_modules) <- unique(moddata$MODULE)
+      for(iter in 1:nrow(addBack)){
+        # get module name from merged
+        mod <- names(merged_modules)[grepl(unlist(strsplit(addBack$Module[iter], split = ", "))[1], merged_modules)]
+        temp <- data.frame("MODULE"=mod, 
+                           "GENE"=addBack$GENE[iter], 
+                           "OVERLAP"=merged_modules[names(merged_modules)==mod],
+                           "NODE"=addBack$GENE[iter], stringsAsFactors = FALSE)
+        moddata <- rbind(moddata, temp)
+      }
+    }
     
-    write.table(moddatainfo, paste0(plan$folder,"merged_", mifile),  
+    if(!dir.exists(output_Dir)) dir.create(output_Dir)
+    
+    write.table(moddata, paste0(output_Dir,"/merged_", mdfile),  
                 sep='\t', col.names=T, row.names=F, quote=F) 
+    if(!is.null(infofile_path)){
+      write.table(moddatainfo, paste0(output_Dir,"/merged_", mifile),  
+                  sep='\t', col.names=T, row.names=F, quote=F) 
+    }
   }
 }
 
