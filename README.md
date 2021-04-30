@@ -194,7 +194,9 @@ rctm0476 | 8.22e-25 |	0 |	79 | 1486 |	0.99 | 8.87e-23 | GPCR ligand binding
 rctm0917 | 0.000175 |	0.00031 |	12 | 435 | 1 | 0.0026 | Protein folding
 
 ### Module Merging
-This step merges redundant pathways (pathways with significant sharing of member genes) into relatively independent gene sets. The input for this script as exactly written below is the results file from MSEA (see output #4 from Marker Set Enrichment Analysis).
+This step merges redundant pathways (pathways with significant sharing of member genes) into supersets. The degree of merging can be modified based on the rcutoff (ratio threshold). A recommended rcutoff is 0.33, which means that modules sharing overlap above this ratio will be merged. For more module merging, set the rcutoff lower.
+
+The inputs for this script as exactly written below is the results file from MSEA (see output #4 from Marker Set Enrichment Analysis).
 
 The minimum input for this script is a list of modules. If the user does post-analysis of the results file where the significant modules are already extracted, a text file with only one column 'MODULE' is sufficient for this script and the script can easily be modified to allow this. In the script below, lines with "##" are necessary if inputting a list of already filtered modules. Everything after the section "Merge modules before 2nd SSEA" requires only the list of modules. 
 
@@ -396,4 +398,4 @@ runMSEA(association_file = "./GWAS/Kunkle_AD.txt",
 ```
 
 #### Extra notes
-We understand the confusion with 'LOCUS' as the column name as opposed to 'MARKER'. In the scripts and ldprune program provided in this github page, 'LOCUS' needs to be the column name as opposed to 'MARKER'. We hope to change to 'MARKER' soon to reflect that SNP, gene, protein, and metabolite information can be used. To clarify, 'LOCUS' can contain <b>any</b> type of information, though LOCUS implies location in genome (SNP). 
+'LOCUS' is synonymous to 'MARKER'. In the scripts and ldprune program provided in this github page, 'LOCUS' needs to be the column name as opposed to 'MARKER'. We hope to change to 'MARKER' soon to reflect that SNP, gene, protein, and metabolite information can be used. To clarify, 'LOCUS' can contain <b>any</b> type of information, though LOCUS implies location in genome (SNP). 
