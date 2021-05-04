@@ -2353,6 +2353,7 @@ ssea.finish.fdr <- function(job, jobs=NULL) {
     res[,3] <- fdrates
     
     # Save P-values.
+    jdir <- file.path(job$folder, "msea")
     fname <- paste(job$label, ".pvalues.txt", sep="")
     tool.save(frame=res, file=fname, directory=jdir)
     
