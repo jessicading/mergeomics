@@ -7,10 +7,6 @@ KDA visualization (kda2cytoscape)
 
 KDA analysis (kda.analyze)
 	Circumvent ks.test error that occurs in large KDAs
-	
-Module merging (ssea2kda)
-	Add back genes that were lost from merging modules
-	Fix case with no shared genes (tool.coalesce)
 
 MSEA for non-GWAS (ssea.start)
 	If user does not provide the genfile (mapping file), then assume the run is non-GWAS (eg., TWAS, PWAS) and create “fake” mapping file and set appropriate parameters
@@ -21,6 +17,10 @@ Meta output (ssea.finish.fdr)
 MSEA to KDA file preparation (ssea2kda)
 	Handling of one or two modules passed to KDA
 	Take out control gene sets
+	Add back genes that were lost from merging modules
 
 MSEA output (ssea.finish.details and ssea.finish.fdr)
 	Add top markers and top corresponding values to .results.txt output file
+
+Module merging (tool.coalesce)
+	Add edge case handling
