@@ -1,12 +1,13 @@
-source("Mergeomics.R")
-library(ggplot2) # used for GWAS_MSEA_Screen
+#source("/u/project/xyang123/xyang123-NOBACKUP/jading/Mergeomics.R")
+#setwd("/u/flashscratch/j/jading/10X_Single_Cell/AD_HYP/")
+#library(ggplot2) # used for GWAS_MSEA_Screen
 
 # Marker Dependency Filtering
 # 
 # Filters markers based on dependency (such as linkage disequilibrium) file given. Prepares
 # files for MSE (mapping and loci files)
 #
-# @param LOCFILE: association file with 'LOCUS' and 'VALUE' headers. Value reflects strength of association.
+# @param MARFILE: association file with 'LOCUS' and 'VALUE' headers. Value reflects strength of association.
 #                 (for example, can use -log10 pvalues)
 # @param GENFILE: file maping loci to genes - 'GENE' 'LOCUS'
 # @param LNKFILE: marker dependency file 'LOCUSa' 'LOCUSb' 'WEIGHT'
@@ -22,24 +23,31 @@ library(ggplot2) # used for GWAS_MSEA_Screen
 #         and ld threshold information appended (ex. 50.50.g.txt)
 #
 # @examples
-# runMDF(LOCFILE = "./GWAS/Kunkle_AD.txt",
+# runMDF(MARFILE = "./GWAS/Kunkle_AD.txt",
 #        GENFILE = "./mapping/Brain_Hippocampus.eQTL.txt", 
 #        LNKFILE = "./linkage/LD50.1000G.CEU.txt", 
 #        output_dir = "./MSEA/Data/",
 #        ldprune = "./MDPRUNE/ldprune")
 #
-runMDF <-function(LOCFILE,
+runMDF <-function(MARFILE,
                   GENFILE,
                   LNKFILE,
                   trait_name=NULL, 
                   mapping_name=NULL, 
-                  output_dir="./MSEA/",
+                  output_dir="./MSEA/Data/",
                   nmax=0.5,
                   ld_threshold=50,
-                  ldprune="ldprune"){
+                  editFiles=FALSE,
+                  mdprune="mdprune"){
+  
+  # change to appropriate headers
+  if(editFiles){
+    system(paste0("sed -i \"1s/.*/GENE\\tMARKER/\" ",GENFILE))
+    system(paste0("sed -i \"1s/.*/MARKERa\\tMARKERb\\tWEIGHT/\" ",LNKFILE))
+  }
   
   if(is.null(trait_name) & is.null(mapping_name)){
-    trait_name = unlist(strsplit(LOCFILE,"/"))[length(unlist(strsplit(LOCFILE,"/")))]
+    trait_name = unlist(strsplit(MARFILE,"/"))[length(unlist(strsplit(MARFILE,"/")))]
     trait_name = gsub(".txt","",trait_name)
     
     mapping_name = unlist(strsplit(GENFILE,"/"))[length(unlist(strsplit(GENFILE,"/")))]
@@ -47,30 +55,30 @@ runMDF <-function(LOCFILE,
   }
   
   label=paste(output_dir,trait_name,'.',mapping_name,sep="")
-  ifelse(!dir.exists(label), dir.create(label),FALSE)
+  ifelse(!dir.exists(label), dir.create(label, recursive = TRUE),FALSE)
   
   bash_file <- file(paste0(label,".bash"))
-  writeLines(c(paste('LOCFILE="',LOCFILE,'"',sep=''),
+  writeLines(c(paste('MARFILE="',MARFILE,'"',sep=''),
                paste('GENFILE="',GENFILE,'"',sep=''),
                paste('LNKFILE="', LNKFILE,'"',sep=""),
                paste('OUTPATH="',output_dir,trait_name,'.',mapping_name,'/"',sep=""),
                paste('NTOP=',nmax,sep=""),
-               paste("echo -e \"LOCUS\\tVALUE\" > /tmp/header.txt"),
-               paste("nice sort -r -g -k 2 $LOCFILE > /tmp/sorted.txt"),
+               paste("echo -e \"MARKER\\tVALUE\" > /tmp/header.txt"),
+               paste("nice sort -r -g -k 2 $MARFILE > /tmp/sorted.txt"),
                paste("NMARKER=$(wc -l < /tmp/sorted.txt)"),
                paste("NMAX=$(echo \"($NTOP*$NMARKER)/1\" | bc)"),
                paste("nice head -n $NMAX /tmp/sorted.txt > /tmp/top.txt"),
                paste("cat /tmp/header.txt /tmp/top.txt > /tmp/subset.txt"),
-               paste('nice ',ldprune," /tmp/subset.txt $GENFILE $LNKFILE $OUTPATH",sep="")),
+               paste('nice ',mdprune," /tmp/subset.txt $GENFILE $LNKFILE $OUTPATH",sep="")),
              bash_file)
   close(bash_file)
   
-  ifelse(!dir.exists(output_dir), dir.create(output_dir),FALSE)
+  ifelse(!dir.exists(output_dir), dir.create(output_dir, recursive = TRUE),FALSE)
   
   name=paste(as.character(nmax*100), ld_threshold, sep=".")
   system(paste0("bash ", paste0(label,".bash")))
   system(paste("mv ",label,"/genes.txt ",label,"/",name,".g.txt",sep=""))
-  system(paste("mv ",label,"/loci.txt ",label,"/",name,".l.txt",sep=""))
+  system(paste("mv ",label,"/marker.txt ",label,"/",name,".m.txt",sep=""))
 }
 
 # Marker Set Enrichment Analysis
@@ -96,7 +104,7 @@ runMDF <-function(LOCFILE,
 #         and ld threshold information appended (ex. 50.50.g.txt)
 #
 # @examples
-# runMDF(LOCFILE = "./GWAS/Kunkle_AD.txt",
+# runMDF(MARFILE = "./GWAS/Kunkle_AD.txt",
 #        GENFILE = "./mapping/Brain_Hippocampus.eQTL.txt", 
 #        LNKFILE = "./linkage/LD50.1000G.CEU.txt", 
 #        output_dir = "./MSEA/Data/",
@@ -106,7 +114,7 @@ runMSEA <- function(MDF_output_dir = NULL,
                     association_file,
                     mapping_file=NULL,
                     marker_set, 
-                    output_dir="./Results", 
+                    output_dir="./MSEA/Results", 
                     label=NULL, 
                     info=NULL,
                     permtype = "gene",
@@ -178,7 +186,7 @@ runMSEA <- function(MDF_output_dir = NULL,
     }
   }else{
     association_file = list.files(MDF_output_dir, 
-                                  full.names = TRUE)[grep(".l.txt",
+                                  full.names = TRUE)[grep(".m.txt",
                                                           list.files(MDF_output_dir, 
                                                                      full.names = TRUE))]
     mapping_file = list.files(MDF_output_dir,
@@ -193,7 +201,7 @@ runMSEA <- function(MDF_output_dir = NULL,
     }
   }
   
-  ifelse(!dir.exists(output_dir), dir.create(output_dir),FALSE)
+  ifelse(!dir.exists(output_dir), dir.create(output_dir, recursive = TRUE),FALSE)
   
   ass <- read.delim(association_file, stringsAsFactors = FALSE)
   colnames(ass) <- c("MARKER","VALUE")
