@@ -293,13 +293,6 @@ job.kda$depth<-1
 job.kda$direction <- 1
 job.kda$nperm <- 2000
 
-moddata <- tool.read(job.kda$modfile)
-mod.names <- unique(moddata$MODULE)
-moddata <- moddata[which(!is.na(match(moddata$MODULE, mod.names))),]
-## save this to a temporary file and set its path as new job.kda$modfile:
-tool.save(moddata, "subsetof.supersets.txt")
-job.kda$modfile <- "subsetof.supersets.txt"
-
 ## Let's run KDA!
 job.kda <- kda.configure(job.kda)
 job.kda <- kda.start(job.kda)
