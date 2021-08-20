@@ -1,3 +1,5 @@
+*** Please use Mergeomics_Release1.19.0_beta.R and report any issues
+
 # Mergeomics
 Integrative Network Analysis of Omics Data<br/>
 Developed by: Ville-Petteri Makinen, Le Shu, Yuqi Zhao, Zeyneb Kurt, Bin Zhang, Xia Yang
