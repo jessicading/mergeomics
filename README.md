@@ -26,8 +26,6 @@ There are example files for each input and output.
 #### Notes
 All files used are tab delimited text files.
 
-In previous documentations and tutorials, "MARKER" was used as a column name in input files, and this tutorial will still describe associations as "markers" but in input and output files, "LOCUS" will take the place of "MARKER". This is because the particular scripts being used as examples here use "LOCUS" and not "MARKER" column names. This can be modified by the user in their own analysis. 
-
 All scripts except MDF need to source "Mergeomics.R".
 
 ### Marker Dependency Filtering
@@ -37,10 +35,10 @@ Marker dependency filtering (MDF) removes dependent markers and prepares an opti
 As of writing, MDF is done mostly for GWAS data (to correct for linkage disequilibrium). If starting from transcriptomic, proteomic, epigenomic, or metabolomic data, start from MSEA (it is recommended to use the `runMSEA` function to simplify the analysis). 
 
 #### Inputs
-1. ```LOCFILE```: Disease/Phenotype Associated Data <br/> 
+1. ```MARFILE```: Disease/Phenotype Associated Data <br/> 
 This file must have two columns named 'LOCUS' and 'VALUE' where value denotes the association to the trait of interest (p-value). The p-values must be negative log (base 10) transformed (-log P). The higher the value, the stronger the association.
 ```
-LOCUS             VALUE
+MARKER             VALUE
 rs4747841         0.1452
 rs4749917         0.1108
 rs737656          1.3979
@@ -56,7 +54,7 @@ SCYL3             rs72691775
 3. ```LNKFILE```: Marker Dependency File (ex. Linkage Disequilibirum)<br/>
 LD files can be obtained from the [HapMap consortium](https://www.sanger.ac.uk/resources/downloads/human/hapmap3.html). 
 ```
-LOCUSa            LOCUSb              WEIGHT            
+MARKERa            MARKERb              WEIGHT            
 rs143225517       rs3094315           0.962305
 rs4475691         rs950122            1
 rs4475691         rs3905286           0.921467
@@ -77,20 +75,20 @@ To increase result robustness and conserve memory and time, it is sometimes usef
 # Written by Ville-Petteri Makinen
 #
 #
-LOCFILE="../GWAS/DIAGRAMstage1_T2D.txt"
+MARFILE="../GWAS/DIAGRAMstage1_T2D.txt"
 GENFILE="../resources/mapping/esnps/Adipose_Subcutaneous.txt"
 LNKFILE="../resources/linkage/LD50.1000G.CEU.txt"
 OUTPATH="../MSEA/Data/DIAGRAMstage1_T2D.Adipose_Subcutaneous/"
 NTOP=0.2
-echo -e "LOCUS\tVALUE" > /tmp/header.txt
-nice sort -r -g -k 2 $LOCFILE > /tmp/sorted.txt
+echo -e "MARKER\tVALUE" > /tmp/header.txt
+nice sort -r -g -k 2 $MARFILE > /tmp/sorted.txt
 NMARKER=$(wc -l < /tmp/sorted.txt)
 NMAX=$(echo "($NTOP*$NMARKER)/1" | bc)
 nice head -n $NMAX /tmp/sorted.txt > /tmp/top.txt
 cat /tmp/header.txt /tmp/top.txt > /tmp/subset.txt
 
 # Remove SNPs in LD and create input files for SSEA.
-nice /u/home/j/jading/project-xyang123/GWAS/MDPRUNE/ldprune /tmp/subset.txt $GENFILE $LNKFILE $OUTPATH
+nice /u/home/j/jading/project-xyang123/GWAS/MDPRUNE/mdprune /tmp/subset.txt $GENFILE $LNKFILE $OUTPATH
 
 ```
 
@@ -98,14 +96,14 @@ nice /u/home/j/jading/project-xyang123/GWAS/MDPRUNE/ldprune /tmp/subset.txt $GEN
 These files serve as inputs for MSEA.
 1. Gene file
 ```
-GENE              LOCUS
+GENE              MARKER
 RESP18	          rs7600417
 RESP18	          rs35083292
 ADPRH	          rs60643107
 ```
 2. Loci file
 ```
-LOCUS             VALUE
+MARKER             VALUE
 rs10000012	  1.9776e+00
 rs1000274	  9.4846e-01
 rs10003931        1.3696e+00
@@ -148,7 +146,7 @@ job.ssea <- list()
 job.ssea$label <- "DIAGRAMstage2_T2D.Adipose_Subcutaneous"
 job.ssea$folder <- "../results/"
 job.ssea$genfile <- "./Data/Adipose_Subcutaneous/genes.txt"
-job.ssea$locfile <- "./Data/Adipose_Subcutaneous/loci.txt"		
+job.ssea$marfile <- "./Data/Adipose_Subcutaneous/loci.txt"		
 job.ssea$modfile <- "../resources/genesets/kbr.mod.txt"
 job.ssea$inffile <- "../resources/genesets/kbr.info.txt"
 job.ssea$permtype <- "gene"
@@ -319,11 +317,11 @@ source("Mergeomics_utils.R")
 ### GWAS Enrichment
 
 ```R
-runMDF(LOCFILE = "./GWAS/Kunkle_AD.txt",
+runMDF(MARFILE = "./GWAS/Kunkle_AD.txt",
        GENFILE = "./mapping/Brain_Hippocampus.eQTL.txt", 
        LNKFILE = "./linkage/LD50.1000G.CEU.txt", 
        output_dir = "./MSEA/Data/", # if more than one directory, must create beforehand such as in this case
-       ldprune = "./GWAS/ldprune")
+       mdprune = "./GWAS/ldprune")
 runMSEA(MDF_output_dir = "./MSEA/Data/Kunkle_AD.Brain_Hippocampus.eQTL/",
         marker_set="./HP_MSEA_DEGs.txt")
 runKDA(MSEA_results_dir = "./Results/msea/", #contains only one set of results with one "-.results.txt" file
