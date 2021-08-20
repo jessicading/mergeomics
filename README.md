@@ -32,7 +32,7 @@ All scripts except MDF need to source "Mergeomics.R".
 
 ### Marker Dependency Filtering
 
-Marker dependency filtering (MDF) removes dependent markers and prepares an optimized marker and gene file for marker set enrichment analysis (MSEA). You must have the ldprune software installed for this script. The inputs are enumerated in the scripts as enumerated below. 
+Marker dependency filtering (MDF) removes dependent markers and prepares an optimized marker and gene file for marker set enrichment analysis (MSEA). You must have the mdprune software installed for this script. The inputs are enumerated below. 
 
 As of writing, MDF is done mostly for GWAS data (to correct for linkage disequilibrium). If starting from transcriptomic, proteomic, epigenomic, or metabolomic data, start from MSEA (it is recommended to use the `runMSEA` function to simplify the analysis). 
 
@@ -323,7 +323,7 @@ runMDF(MARFILE = "./GWAS/Kunkle_AD.txt",
        GENFILE = "./mapping/Brain_Hippocampus.eQTL.txt", 
        LNKFILE = "./linkage/LD50.1000G.CEU.txt", 
        output_dir = "./MSEA/Data/", # if more than one directory, must create beforehand such as in this case
-       mdprune = "./GWAS/ldprune")
+       mdprune = "./GWAS/mdprune")
 runMSEA(MDF_output_dir = "./MSEA/Data/Kunkle_AD.Brain_Hippocampus.eQTL/",
         marker_set="./HP_MSEA_DEGs.txt")
 runKDA(MSEA_results_dir = "./Results/msea/", #contains only one set of results with one "-.results.txt" file
