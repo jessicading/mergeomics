@@ -267,8 +267,8 @@ geneOverlap <- function(results_Dir, output_Dir, perc_gene_overlap, fdr_cutoff=0
   cat("Finished. shared_ files made.")
 }
 
-source("~/Desktop/Yang_Lab/Mergeomics/geneOntology.R")
-source("~/Desktop/Yang_Lab/resources/genesets/R-tomfunctions.R")
+#source("~/Desktop/Yang_Lab/Mergeomics/geneOntology.R")
+#source("~/Desktop/Yang_Lab/resources/genesets/R-tomfunctions.R")
 
 #-----------------------------------------------------------------------------------------------------#
 # This function makes annotations for supersets that were obtained from module merge. 
@@ -938,8 +938,8 @@ merge_modules <- function(name, modules_df, rcutoff, output_Dir, modfile_path, i
   plan$inffile= infofile_path
   #=====================================================
   pool=c()
-    aa = modules_df
-    if (nrow(aa) > 0) pool=unique(c(pool, as.character(aa[,"MODULE"])))
+  aa = modules_df
+  if (nrow(aa) > 0) pool=unique(c(pool, as.character(aa[,"MODULE"])))
   
   #=====================================================
   #=== Merge the modules before 2nd SSEA
@@ -947,6 +947,8 @@ merge_modules <- function(name, modules_df, rcutoff, output_Dir, modfile_path, i
     meg.mods<- tool.read(plan$modfile)
     merged.modules <- pool
     moddata <- meg.mods[which(!is.na(match(meg.mods[,1], merged.modules))),]
+    all_mod <- moddata
+    
     # Merge and trim overlapping modules.
     rmax <- rcutoff
     moddata$OVERLAP <- moddata$MODULE
@@ -969,7 +971,32 @@ merge_modules <- function(name, modules_df, rcutoff, output_Dir, modfile_path, i
     moddata[, 4] <- moddata[, 2];  names(moddata)[4] <- c("NODE")
     mdfile=paste0(name, ".mod.txt"); mifile=paste0(name, ".info.txt")
     
-    write.table(moddata, paste0(plan$folder,"merged_", mdfile),  #deleted "/" before "merged"
+    addBack <- data.frame("GENE"=setdiff(unique(all_mod$GENE), unique(moddata$GENE)))
+    if(nrow(addBack)>0){
+      cat("There were ", nrow(addBack), " genes lost from merging. Adding back...\n")
+      modules <- c()
+      for(gene in addBack$GENE){
+        modules <- c(modules, concatenate(all_mod$MODULE[all_mod$GENE==gene], mysep = ", "))
+      }
+      addBack$Module <- modules
+      merged_modules <- unique(moddata$OVERLAP)
+      names(merged_modules) <- unique(moddata$MODULE)
+      merged <- moddata
+      for(iter in 1:nrow(addBack)){
+        # get module name from merged
+        mod <- names(merged_modules)[grepl(unlist(strsplit(addBack$Module[iter], split = ", "))[1], merged_modules)]
+        temp <- data.frame("MODULE"=mod, 
+                           "GENE"=addBack$GENE[iter], 
+                           "OVERLAP"=merged_modules[names(merged_modules)==mod],
+                           "NODE"=addBack$GENE[iter], stringsAsFactors = FALSE)
+        merged <- rbind(merged, temp)
+      }
+    }
+    
+    write.table(merged, paste0(plan$folder,"merged_addBackGenes_", mdfile),  
+                sep='\t', col.names=T, row.names=F, quote=F) 
+    
+    write.table(moddata, paste0(plan$folder,"merged_", mdfile),  
                 sep='\t', col.names=T, row.names=F, quote=F) 
     
     write.table(moddatainfo, paste0(plan$folder,"merged_", mifile),  
@@ -1176,35 +1203,94 @@ runKDA <- function(nodes, network, trim = NULL){
   job.kda <- kda2cytoscape(job.kda)
 }
 
-summarizeKDA <- function(KDA_folder, protein_descrip, name){
+summarizeKDA <- function(KDA_folder, protein_descrip, name, mod_info, make_consensus=FALSE){
   results = data.frame(stringsAsFactors = FALSE)
-  KDs = data.frame(stringsAsFactors = FALSE)
+  KDs = list()
+  mod_info <- read.delim(mod_info, stringsAsFactors = FALSE)
   protein_names = read.delim(protein_descrip, 
                              header = TRUE, stringsAsFactors = FALSE, quote = "")
-  for(l in list.files(KDA_folder)){ 
-    if(length(list.files(paste0("./",l, "/")))==1){
+  #dirs <- list.dirs(KDA_folder, recursive = FALSE)
+  dirs <- c("~/Documents/Collaborations/Peng/KDA_results/Selected_Pathway_Mod_networks.hs.brain",
+            "~/Documents/Collaborations/Peng/KDA_results/Selected_Pathway_Mod_string_network_PPI_5perc",
+            "~/Documents/Collaborations/Peng/KDA_results/Selected_Pathway_Mod_networks.hs.all",
+            "~/Documents/Collaborations/Peng/KDA_results/merged_AD_Brain_Modules.mod_networks.hs.brain",
+            "~/Documents/Collaborations/Peng/KDA_results/AD_Brain_Modules_string_network_PPI_5perc",
+            "~/Documents/Collaborations/Peng/KDA_results/AD_T2D_Brain_eQTLs_merged_networks.hs.brain",
+            "~/Documents/Collaborations/Peng/KDA_results/merged_AD_T2D_Brain_Modules.mod_string_network_PPI_5perc",
+            "~/Documents/Collaborations/Peng/KDA_results/merged_AD_Brain_Modules.mod_networks.hs.all",
+            "~/Documents/Collaborations/Peng/KDA_results/merged_AD_T2D_Brain_Modules.mod_networks.hs.all",
+            "~/Documents/Collaborations/Peng/KDA_results/merged_Coexpression_AD.mod_networks.hs.brain",
+            "~/Documents/Collaborations/Peng/KDA_results/merged_Canonical_AD.mod_networks.hs.brain",
+            "~/Documents/Collaborations/Peng/KDA_results/All_AD_T2D_Modules_networks.hs.brain",
+            "~/Documents/Collaborations/Peng/KDA_results/merged_Coexpression_AD.mod_networks.hs.all",
+            "~/Documents/Collaborations/Peng/KDA_results/merged_Canonical_AD.mod_networks.hs.all",
+            "~/Documents/Collaborations/Peng/KDA_results/merged_All_AD_T2D.mod_networks.hs.all")
+  for(l in dirs){
+  #for(l in list.dirs(KDA_folder, recursive = FALSE)){ 
+    analysis <- unlist(strsplit(l, split = "/"))[length(unlist(strsplit(l, split = "/")))]
+    analysis <- gsub("Selected_Pathway_Mod_networks.hs.brain", "Peng_Selected_Brain_Net",analysis)
+    analysis <- gsub("Selected_Pathway_Mod_string_network_PPI_5perc", "Peng_Selected_String_Net", analysis)
+    analysis <- gsub("Selected_Pathway_Mod_networks.hs.all", "Peng_Selected_Multitissue_Net",analysis)
+    analysis <- gsub("merged_AD_Brain_Modules.mod_networks.hs.brain", "AD_Brain_Informed_Brain_Net",analysis)
+    analysis <- gsub("AD_Brain_Modules_string_network_PPI_5perc", "AD_Brain_Informed_String_Net", analysis)
+    analysis <- gsub("AD_T2D_Brain_eQTLs_merged_networks.hs.brain", "AD_T2D_Brain_Informed_Brain_Net",analysis)
+    analysis <- gsub("merged_AD_T2D_Brain_Modules.mod_string_network_PPI_5perc", "AD_T2D_Brain_Informed_String_Net",analysis)
+    analysis <- gsub("merged_AD_Brain_Modules.mod_networks.hs.all", "AD_Brain_Informed_Multitissue_Net", analysis)
+    analysis <- gsub("merged_AD_T2D_Brain_Modules.mod_networks.hs.all", "AD_T2D_Brain_Informed_Multitissue_Net",analysis)
+    analysis <- gsub("merged_Coexpression_AD.mod_networks.hs.brain", "AD_Coexpr_Brain_Net",analysis)
+    analysis <- gsub("merged_Canonical_AD.mod_networks.hs.brain", "AD_Canonical_Brain_Net",analysis)
+    analysis <- gsub("All_AD_T2D_Modules_networks.hs.brain", "AD_T2D_Brain_Net",analysis)
+    analysis <- gsub("merged_Coexpression_AD.mod_networks.hs.all", "AD_Coexpr_Multitissue_Net",analysis)
+    analysis <- gsub("merged_Canonical_AD.mod_networks.hs.all", "AD_Canonical_Multitissue_Net",analysis)
+    analysis <- gsub("merged_All_AD_T2D.mod_networks.hs.all", "AD_T2D_Multitissue_Net",analysis)
+    if(length(list.dirs(l, recursive = FALSE))==1){
       cat("No significant key drivers found for", l, "\n")
       next
     }
     else{
-      key_drivers = read.delim(paste0(KDA_folder,l,"/kda/wKDA.results.txt"), stringsAsFactors = FALSE)
-      valued_indices = which(!is.na(key_drivers$NODE[1:5]))
-      edges = read.delim(paste0(KDA_folder,l,"/cytoscape/kda2cytoscape.edges.txt"), stringsAsFactors = FALSE)
+      key_drivers = read.delim(paste0(l,"/kda/wKDA.results.txt"), stringsAsFactors = FALSE)
+      key_drivers <- key_drivers[!is.na(key_drivers$NODE),]
+      edges = read.delim(paste0(l,"/cytoscape/kda2cytoscape.edges.txt"), stringsAsFactors = FALSE)
       edges = edges[!duplicated(edges[,c(1,2)]),] # makes an edge for each module but don't want this..
-      nodes = read.delim(paste0(KDA_folder,l,"/cytoscape/kda2cytoscape.nodes.txt"), stringsAsFactors = FALSE)
-      temp = data.frame(stringsAsFactors = FALSE)
+      nodes = read.delim(paste0(l,"/cytoscape/kda2cytoscape.nodes.txt"), stringsAsFactors = FALSE)
       
       # make network summary table
-      temp = data.frame("NETWORK"=l,
-                        "KDs"=length(key_drivers$NODE),
-                        "KDs_p<0.05"=sum(key_drivers$P<0.05),
-                        "KDs_fdr<0.05"=sum(key_drivers$FDR<0.05),
-                        "topKDs"=concatenate(key_drivers$NODE[valued_indices], mysep = ", "),
-                        "topKDs_fdr"=concatenate(key_drivers$FDR[valued_indices], mysep = ", "),
-                        "n_nodes" = length(nodes$NODE),
-                        "n_edges"=length(edges$TAIL),
+      temp = data.frame("Network"=analysis,
+                        "KDs_p<0.05"=length(unique(key_drivers$NODE[key_drivers$P<0.05])),
+                        "KDs_fdr<0.05"=length(unique(key_drivers$NODE[key_drivers$FDR<0.05])),
+                        "Top KDs"=concatenate(unique(key_drivers$NODE)[1:5], mysep = ", "),
+                        "nNodes" = length(nodes$NODE),
+                        "nEdges"=length(edges$TAIL),
                         "avg_degree"= (length(edges$TAIL)/length(unique(append(edges$TAIL, edges$HEAD)))),
-                        "perc_member"=(sum(grepl("chart", nodes$URL)))/length(nodes$NODE), stringsAsFactors = FALSE)
+                        "perc_member"=(sum(grepl("chart", nodes$URL)))/length(nodes$NODE), 
+                        check.names = FALSE,
+                        stringsAsFactors = FALSE)
+      
+      modules <- unique(gsub(",..","",key_drivers$MODULE[key_drivers$FDR<0.05]))
+      if(length(intersect(mod_info$MODULE, modules))>0){ 
+        temp$Modules_Represented <- concatenate(mod_info$DESCR[mod_info$MODULE %in% modules], mysep = ", ")
+      }
+      else{
+        temp$Modules_Represented <- ""
+      }
+      # run pathway enrichment on KDs FDR < 0.05
+      if(sum(key_drivers$FDR<0.05)!=0){
+        pathway_df <- makePathwayEnrichmentDf(DEG_df = data.frame("MODULE"="KDs", 
+                                                                  "GENE"=unique(key_drivers$NODE[key_drivers$FDR<0.05]), 
+                                                                  stringsAsFactors = FALSE), 
+                                              resources_path = "~/Documents/Resources/Reactome/", 
+                                              convertToHuman = FALSE, output_Dir = "ForKDAsummary")
+        if(sum(pathway_df$nOverlap>0)>0){
+          pathways <- concatenate(pathway_df$Pathway[pathway_df$FDR<0.05], mysep = ", ")
+          temp$Sig_KD_FDR_0.05_Pathway_Enrichment <- pathways
+        }
+        else{
+          temp$Sig_KD_FDR_0.05_Pathway_Enrichment <- "None"
+        }
+      }
+      else{
+        temp$Sig_KD_FDR_0.05_Pathway_Enrichment <- "None"
+      }
       results = rbind(results, temp)
       
       info = c()
@@ -1226,22 +1312,273 @@ summarizeKDA <- function(KDA_folder, protein_descrip, name){
       }
       
       # make KD summary table
-      kd_temp = data.frame("NETWORK"=l,
-                           "KDs"= key_drivers$NODE[indices],
-                           "Degrees" = key_drivers$N.neigh[indices],
+      kd_temp = data.frame("Network"=analysis,
+                           "Module"= key_drivers$MODULE[indices],
+                           "Key Driver"= key_drivers$NODE[indices],
+                           "N.module.network.intersection" = key_drivers$N.mod[indices],
+                           "N.neighbor"= key_drivers$N.neigh[indices],
+                           "N.mod.observed"=key_drivers$N.obsrv[indices],
+                           "N.mod.expected"=key_drivers$N.expct[indices],
                            "P-value" = key_drivers$P[indices],
                            "FDR" = key_drivers$FDR[indices],
                            "INFO" = info,
-                           "MEMBER" = key_drivers$MEMBER[indices], stringsAsFactors = FALSE)
-      KDs = rbind(KDs, kd_temp)
+                           "MEMBER" = key_drivers$MEMBER[indices], 
+                           check.names = FALSE,
+                           stringsAsFactors = FALSE)
+      if(length(intersect(mod_info$MODULE, key_drivers$MODULE[indices]))>0){
+        kd_temp$Module_Descr <- sapply(kd_temp$Module, function(x){
+          x <- gsub(",..","",x)
+          if(x %in% mod_info$MODULE) return(mod_info$DESCR[mod_info$MODULE==x])
+          else return("")
+        })
+        kd_temp <- kd_temp[,c(1:2,12,3:11)]
+      }
+      microarray_genes <- kd_temp$`Key Driver`[str_count(kd_temp$`Key Driver`, "[0-9]")==6 & 
+                                                 str_count(kd_temp$`Key Driver`,"[A-Z]")==2]
+      kd_temp <- kd_temp[!(kd_temp$`Key Driver` %in% microarray_genes),]
+      kd_temp <- kd_temp[!grepl("^MMT|XM_|NM_|ENSMUS|_at|^MMS|^DKF|^mCT|_|Rik", kd_temp$`Key Driver`),] 
+      
+      KDs[[analysis]] = kd_temp
     }
   }
   
-  write.table(results, paste0(name, "_results_summary.txt"), 
+  write.table(results, paste0(KDA_folder,name, "_results_summary.txt"), 
               row.names = FALSE, quote = FALSE, sep="\t")
   
-  write.table(KDs, paste0(name, "_KDs_summary.txt"), 
-              row.names = FALSE, quote = FALSE, sep="\t")
+  if(make_consensus){
+    # get all key drivers
+    kds <- c()
+    for(iter in 1:length(KDs)){
+      kds <- c(kds, KDs[[iter]]$`Key Driver`)
+    }
+    kds <- unique(kds)
+    res <- data.frame("Key Driver"=kds, stringsAsFactors = FALSE, check.names = FALSE)
+    for(net in names(KDs)){
+      present <- c()
+      for(kd in kds){
+        if(kd %in% KDs[[net]]$`Key Driver`) present <- c(present,1)
+        else present <- c(present,0)
+      }
+      res[,net] <- present
+    }
+    mods <- c()
+    for(kd in kds){
+      individ_mods <- c()
+      for(net in names(KDs)){
+        if("Module_Descr" %in% colnames(KDs[[net]])){
+          individ_mods <- c(individ_mods, KDs[[net]]$Module_Descr[KDs[[net]]$`Key Driver`==kd])
+        }
+        else{
+          individ_mods <- c(individ_mods, KDs[[net]]$Module[KDs[[net]]$`Key Driver`==kd])
+        }
+      }
+      individ_mods <- concatenate(unique(individ_mods), mysep = ", ")
+      mods <- c(mods, individ_mods)
+    }
+    res$Sum <- rowSums(res[,2:(ncol(res)-1)])
+    res$Modules <- mods
+    res$GENE <- res$`Key Driver`
+    res$Info <- annotate_gene(df = res, protein_names = protein_descrip)
+    res$GENE <- NULL
+    res <- res[order(res$Sum, decreasing = TRUE),]
+    KDs$All_Consensus_KD <- res
+    
+    # high priority consensus -----------
+    highp <- c("Peng_Selected_Brain_Net","Peng_Selected_String_Net","Peng_Selected_Multitissue_Net","AD_Brain_Informed_Brain_Net",
+               "AD_Brain_Informed_String_Net","AD_T2D_Brain_Informed_Brain_Net","AD_T2D_Brain_Informed_String_Net")
+    kds <- c()
+    for(iter in 1:length(KDs)){
+      if(sum(grepl(names(KDs)[iter], highp))==0) next
+      kds <- c(kds, KDs[[iter]]$`Key Driver`)
+    }
+    kds <- unique(kds)
+    res <- data.frame("Key Driver"=kds, stringsAsFactors = FALSE, check.names = FALSE)
+    for(net in names(KDs)){
+      if(sum(net==highp)==0) next
+      present <- c()
+      for(kd in kds){
+        if(kd %in% KDs[[net]]$`Key Driver`) present <- c(present,1)
+        else present <- c(present,0)
+      }
+      res[,net] <- present
+    }
+    mods <- c()
+    for(kd in kds){
+      individ_mods <- c()
+      for(net in names(KDs)){
+        if(sum(net==highp)==0) next
+        if("Module_Descr" %in% colnames(KDs[[net]])){
+          individ_mods <- c(individ_mods, KDs[[net]]$Module_Descr[KDs[[net]]$`Key Driver`==kd])
+        }
+        else{
+          individ_mods <- c(individ_mods, KDs[[net]]$Module[KDs[[net]]$`Key Driver`==kd])
+        }
+      }
+      individ_mods <- concatenate(unique(individ_mods), mysep = ", ")
+      mods <- c(mods, individ_mods)
+    }
+    res$Sum <- rowSums(res[,2:(ncol(res)-1)])
+    res$Modules <- mods
+    res$GENE <- res$`Key Driver`
+    res$Info <- annotate_gene(df = res, protein_names = protein_descrip)
+    res$GENE <- NULL
+    res <- res[order(res$Sum, decreasing = TRUE),]
+    KDs$High_Priority_Consensus_KD <- res
+    
+    # brain informed consensus
+    kds <- c()
+    for(iter in 1:length(KDs)){
+      if(!grepl("Brain_Informed", names(KDs)[iter])) next
+      kds <- c(kds, KDs[[iter]]$`Key Driver`)
+    }
+    kds <- unique(kds)
+    res <- data.frame("Key Driver"=kds, stringsAsFactors = FALSE, check.names = FALSE)
+    for(net in names(KDs)){
+      if(!grepl("Brain_Informed", net)) next
+      present <- c()
+      for(kd in kds){
+        if(kd %in% KDs[[net]]$`Key Driver`) present <- c(present,1)
+        else present <- c(present,0)
+      }
+      res[,net] <- present
+    }
+    mods <- c()
+    for(kd in kds){
+      individ_mods <- c()
+      for(net in names(KDs)){
+        if(!grepl("Brain_Informed", net)) next
+        if("Module_Descr" %in% colnames(KDs[[net]])){
+          individ_mods <- c(individ_mods, KDs[[net]]$Module_Descr[KDs[[net]]$`Key Driver`==kd])
+        }
+        else{
+          individ_mods <- c(individ_mods, KDs[[net]]$Module[KDs[[net]]$`Key Driver`==kd])
+        }
+      }
+      individ_mods <- concatenate(unique(individ_mods), mysep = ", ")
+      mods <- c(mods, individ_mods)
+    }
+    res$Sum <- rowSums(res[,2:(ncol(res)-1)])
+    res$Modules <- mods
+    res$GENE <- res$`Key Driver`
+    res$Info <- annotate_gene(df = res, protein_names = protein_descrip)
+    res$GENE <- NULL
+    res <- res[order(res$Sum, decreasing = TRUE),]
+    KDs$Brain_Informed_Consensus_KD <- res
+    
+    # brain network consensus
+    kds <- c()
+    for(iter in 1:length(KDs)){
+      if(!grepl("Brain_Net", names(KDs)[iter])) next
+      kds <- c(kds, KDs[[iter]]$`Key Driver`)
+    }
+    kds <- unique(kds)
+    res <- data.frame("Key Driver"=kds, stringsAsFactors = FALSE, check.names = FALSE)
+    for(net in names(KDs)){
+      if(!grepl("Brain_Net", net)) next
+      present <- c()
+      for(kd in kds){
+        if(kd %in% KDs[[net]]$`Key Driver`) present <- c(present,1)
+        else present <- c(present,0)
+      }
+      res[,net] <- present
+    }
+    mods <- c()
+    for(kd in kds){
+      individ_mods <- c()
+      for(net in names(KDs)){
+        if(!grepl("Brain_Net", net)) next
+        if("Module_Descr" %in% colnames(KDs[[net]])){
+          individ_mods <- c(individ_mods, KDs[[net]]$Module_Descr[KDs[[net]]$`Key Driver`==kd])
+        }
+        else{
+          individ_mods <- c(individ_mods, KDs[[net]]$Module[KDs[[net]]$`Key Driver`==kd])
+        }
+      }
+      individ_mods <- concatenate(unique(individ_mods), mysep = ", ")
+      mods <- c(mods, individ_mods)
+    }
+    res$Sum <- rowSums(res[,2:(ncol(res)-1)])
+    res$Modules <- mods
+    res$GENE <- res$`Key Driver`
+    res$Info <- annotate_gene(df = res, protein_names = protein_descrip)
+    res$GENE <- NULL
+    res <- res[order(res$Sum, decreasing = TRUE),]
+    KDs$Brain_Network_Consensus_KD <- res
+    
+    # multitissue consensus
+    kds <- c()
+    for(iter in 1:length(KDs)){
+      if(!grepl("Multitissue_Net", names(KDs)[iter])) next
+      kds <- c(kds, KDs[[iter]]$`Key Driver`)
+    }
+    kds <- unique(kds)
+    res <- data.frame("Key Driver"=kds, stringsAsFactors = FALSE, check.names = FALSE)
+    for(net in names(KDs)){
+      if(!grepl("Multitissue_Net", net)) next
+      present <- c()
+      for(kd in kds){
+        if(kd %in% KDs[[net]]$`Key Driver`) present <- c(present,1)
+        else present <- c(present,0)
+      }
+      res[,net] <- present
+    }
+    mods <- c()
+    for(kd in kds){
+      individ_mods <- c()
+      for(net in names(KDs)){
+        if(!grepl("Multitissue_Net", net)) next
+        if("Module_Descr" %in% colnames(KDs[[net]])){
+          individ_mods <- c(individ_mods, KDs[[net]]$Module_Descr[KDs[[net]]$`Key Driver`==kd])
+        }
+        else{
+          individ_mods <- c(individ_mods, KDs[[net]]$Module[KDs[[net]]$`Key Driver`==kd])
+        }
+      }
+      individ_mods <- concatenate(unique(individ_mods), mysep = ", ")
+      mods <- c(mods, individ_mods)
+    }
+    res$Sum <- rowSums(res[,2:(ncol(res)-1)])
+    res$Modules <- mods
+    res$GENE <- res$`Key Driver`
+    res$Info <- annotate_gene(df = res, protein_names = protein_descrip)
+    res$GENE <- NULL
+    res <- res[order(res$Sum, decreasing = TRUE),]
+    KDs$Multitissue_Net_Consensus_KD <- res
+    
+  }
+  
+  #mean_df <- read.delim("~/Documents/Collaborations/Peng/AD_hPFC_Mean_Cluster_Expression_wMaxOverallMean.txt", stringsAsFactors = FALSE)
+  
+  for(item in names(KDs)){
+    addExpr <- data.frame(stringsAsFactors = FALSE)
+    for(gene in KDs[[item]]$`Key Driver`){
+      if(gene %in% mean_df$GENE){
+        temp <- mean_df[mean_df$GENE==gene,]
+      }
+      else{
+        temp <-""
+      }
+      addExpr <- rbind(addExpr, temp)
+    }
+    KDs[[item]] <- cbind(KDs[[item]], addExpr)
+  }
+
+  
+  dupped = 1
+  for(iter in 1:length(names(KDs))){
+    if(nchar(names(KDs)[iter])>31){
+      new_name = substr(names(KDs)[iter], start = 1, stop = 31)
+      if(new_name %in% names(KDs)){ # shortened and now same as other name
+        # this is okay assuming there won't be more than 10 duplicates
+        new_name <- paste0(substr(new_name, start = 1, stop = 30), dupped)
+        dupped = dupped + 1
+      }
+      names(KDs)[iter] <- new_name
+    }
+  }
+
+  WriteXLS(x = KDs, ExcelFileName = paste0(KDA_folder,name, "_KDs_summary_Add_CellType_Expression.xls"), SheetNames = names(KDs))
+
 }
 
 # this function outputs a new network in the folder with beginning "mod_"
@@ -1756,7 +2093,7 @@ annotate_gene <- function(vector){
 }
 
 
-replicate <- function(results_Dir, FDR_trim, FDR_cutoff, info_file){
+replicate <- function(results_Dir, FDR_trim, FDR_cutoff, info_file, add_info=FALSE){
   files = list.files(results_Dir)
   mapping = c()
   traits = c()
@@ -1823,9 +2160,11 @@ replicate <- function(results_Dir, FDR_trim, FDR_cutoff, info_file){
     YESs[i] = sum(total[i,]=="YES")
   }
   total["n_Overlap"] = YESs
-  total = total[!(total$n_Overlap<2),] # get rid of no overlaps
+  total = total[!(total$n_Overlap<1),] # get rid of no overlaps
   total = total[order(total$n_Overlap, decreasing = TRUE),]
-  total = addDESCR(df = total, position_to_add = 3, info_file)
+  if(add_info){
+    total = addDESCR(df = total, position_to_add = 3, info_file)
+  }
   return(total)
 }
 
@@ -1890,6 +2229,145 @@ describePathways <- function(modules_list, df, DESCR){
 }
 
 
+subsetNetworkNonPreferredGeneNames <- function(network, keep_kds = FALSE){
+  # TAIL are usually the key drivers, HEAD are the targets
+  microarray_genes <- network$HEAD[str_count(network$HEAD, "[0-9]")==6 & str_count(network$HEAD,"[A-Z]")==2]
+  network <- network[!(network$HEAD %in% microarray_genes),]
+  network <- network[!grepl("^MMT|XM_|NM_|ENSMUS|_at|^MMS|^DKF|^mCT|_|Rik", network$HEAD),] # Add KIAA - nvm these are newly identified long cDNA?? 
+  if(!keep_kds){
+    microarray_genes <- network$TAIL[str_count(network$TAIL, "[0-9]")==6 & str_count(network$TAIL,"[A-Z]")==2]
+    network <- network[!(network$TAIL %in% microarray_genes),]
+    network <- network[!grepl("^MMT|XM_|NM_|ENSMUS|_at|^MMS|^DKF|^mCT|_|Rik", network$TAIL),]
+  }
+  return(network)
+}
+
+changeNetworkColorMapping <- function(nodes, orig_color_mapping, new_color_mapping){
+  nodes <- read.delim(nodes, stringsAsFactors = FALSE)
+  mapping <- read.delim(orig_color_mapping, stringsAsFactors = FALSE)
+  mapping$COLOR <- gsub("#","",mapping$COLOR)
+  for(mod in names(new_color_mapping)){
+    nodes$URL <- gsub(mapping$COLOR[mapping$MODULES==mod],new_color_mapping[mod], nodes$URL)
+  }
+  
+  return(nodes)
+}
+
+addKDMemberInfo <- function(nodes, edges){
+  type <- c()
+  for(row in 1:nrow(nodes)){
+    if(nodes$NODE[row] %in% unique(edges$TAIL)){
+      type <- c(type,"KD")
+    }
+    else if(nodes$URL[row]!=""){
+      type <- c(type,"Member")
+    }
+    else{
+      type <- c(type,"nothing")
+    }
+  }
+  nodes$Type <- type
+  return(nodes)
+}
+
+extractReportedGenes <- function(gwas_file){
+  gwas <- read.delim(gwas_file)
+  gwas_genes = unique(gwas$REPORTED.GENE.S.)
+  gwas_genes_new = c()
+  for(item in 1:length(gwas_genes)){
+    if(grepl(",",gwas_genes[item])){
+      splitted = unlist(strsplit(gwas_genes[item], split = ", "))
+      gwas_genes_new = append(gwas_genes_new, splitted)
+    }
+    else{
+      gwas_genes_new = append(gwas_genes_new, gwas_genes[item])
+    }
+  }
+  #dup <- names(table(gwas_genes_new))[table(gwas_genes_new)>1]
+  if(sum(grepl(" x ", gwas_genes_new))>0){
+    x_genes <- gwas_genes_new[grepl(" x ", gwas_genes_new)]
+    gwas_genes_new <- gwas_genes_new[!grepl(" x ", gwas_genes_new)]
+    splitted_genes <- c()
+    for(gene in x_genes){
+      splitted_genes <- c(splitted_genes, unlist(strsplit(gene, split = " x ")))
+    }
+    gwas_genes_new <- c(gwas_genes_new, splitted_genes)
+  }
+  gwas_genes_new <- gwas_genes_new[gwas_genes_new!="Intergenic"]
+  gwas_genes_new <- gwas_genes_new[gwas_genes_new!="Intergenic region"]
+  gwas_genes_new <- gsub("[*]","",gwas_genes_new)
+  gwas_genes_new = unique(gwas_genes_new)
+  return(gwas_genes_new)
+}
+
+addGWASInfo <- function(nodes, 
+                        GWAS_report_only=FALSE, 
+                        SNPMapped_only=FALSE, 
+                        GWAS_file_AD,
+                        GWAS_file_T2D,
+                        genes_df, 
+                        pval_threshold=3){
+  
+  AD_gwas_genes <- extractReportedGenes(GWAS_file_AD)
+  T2D_gwas_genes <- extractReportedGenes(GWAS_file_T2D)
+  
+  genes_df <- genes_df[genes_df$VALUE>=3,]
+  AD_Mapped_genes <- unique(genes_df$GENE[genes_df$Study=="Transethnic_AD" |
+                                            genes_df$Study=="UKB_AD"])
+  T2D_Mapped_genes <- unique(genes_df$GENE[genes_df$Study=="DIAGRAMstage1_T2D" |
+                                            genes_df$Study=="UKB_T2D"])
+  nodes$GWAS_info <- sapply(nodes$NODE, function(x){
+    info <- c()
+    if((x %in% AD_gwas_genes) & (x %in% T2D_gwas_genes)){
+      info <- c(info, "Shared Reported")
+    }
+    else if((x %in% AD_Mapped_genes) & (x %in% T2D_Mapped_genes)){
+      info <- c(info, "Shared Mapped")
+    }
+    else if((x %in% AD_Mapped_genes) & (x %in% T2D_gwas_genes)){
+      info <- c(info, "AD Mapped T2D Reported")
+    }
+    else if((x %in% T2D_Mapped_genes) & (x %in% AD_gwas_genes)){
+      info <- c(info, "AD Reported T2D Mapped")
+    }
+    else if(x %in% AD_gwas_genes){
+      info <- c(info, "AD Reported")
+    }
+    else if(x %in% T2D_gwas_genes){
+      info <- c(info, "T2D Reported")
+    }
+    else if(x %in% AD_Mapped_genes){
+      info <- c(info, "AD Mapped")
+    }
+    else if(x %in% T2D_Mapped_genes){
+      info <- c(info, "T2D Mapped")
+    }
+    else{
+      info <- c(info, "None")
+    }
+  })
+  
+  return(nodes)
+
+}
+
+concatenate=function(myvect, mysep="")
+{
+  if(length(myvect)==0) return(myvect)
+  if(length(myvect)==1) return(myvect)
+  string = ""
+  for(item in myvect){
+    string = paste(string, item, sep = mysep)
+  }
+  string = substring(string, first=(nchar(mysep)+1))
+  return(string)
+}
+
+
+
+
+
+
 # find consistent modules and unique ones for each different mappings. Hm, I already did this.
 
 # Purpose: 
@@ -1905,14 +2383,14 @@ describePathways <- function(modules_list, df, DESCR){
 #"Nerve_Tibial.GTEXv7.MEGENA_126,.." THIS MODULE WAS NOT ABLE TO BE ANNOTATED IN DIRECT OVERLAP EITHER 
 #if you get the error: "Error in cbind(rep(modulesize, dim(fm)[1]), fm) : object 'fm' not found" - FIND OFFENDING MODULE AND TAKE IT OUT
 
-#WORKFLOW FOR GENE OVERLAP (QUASI)
-#1. have files for both studies (ex. DIAGRAM and UKB) - combine canonical and coexpression
+# WORKFLOW FOR GENE OVERLAP (QUASI)
+# 1. have files for both studies (ex. DIAGRAM and UKB) - combine canonical and coexpression
 #             for AD, I put them in "canonical_coexpr". for T2D, I put them in "combined" (FOLDERS)
-#2. use geneOverlap function for to produce "shared_" files. all other files are used in this function to produce the "shared_" files in the end and have useful information
-#3. transfer "shared_" files to new folder. I called this "quasi_overlap"
-#4. merge modules in "shared_" files
-#5. annotatkee supersets resulting from step 4 using annotate_supersets function
-#6. do summaryTable function to get summary table! 
+# 2. use geneOverlap function for to produce "shared_" files. all other files are used in this function to produce the "shared_" files in the end and have useful information
+# 3. transfer "shared_" files to new folder. I called this "quasi_overlap"
+# 4. merge modules in "shared_" files
+# 5. annotate supersets resulting from step 4 using annotate_supersets function
+# 6. do summaryTable function to get summary table!
 
 # setwd("/Users/jessicading/Desktop/Yang_Lab/T2D_AD/Data/AD_T2D/shared_quasi/")
 # for(i in files){
