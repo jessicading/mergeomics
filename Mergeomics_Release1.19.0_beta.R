@@ -801,33 +801,7 @@ kda.analyze <- function(job) {
     hubs <- job$graph$hubs
     for(i in 1:nmods) {
         members <- job$module2nodes[[i]]
-        p <- tryCatch({kda.analyze.exec(members, job$graph, job$nperm)},
-                      error=function(err,hiterror){
-                          print(paste0("Known error: ", err))
-                          print("Rerunning at last iteration...")
-                          for(j in i:nmods) {
-                              members <- job$module2nodes[[j]]
-                              p <- kda.analyze.exec(members, job$graph, job$nperm)
-                              mask <- which(p >= 0.0)
-                              if(length(mask) < 1) next
-                              
-                              # Find top hit.
-                              tmp <- data.frame(MODULE=j, NODE=hubs[mask], P=p[mask])
-                              pmin <- min(tmp$P)
-                              hit <- which(tmp$P == pmin)
-                              hit <- tmp$NODE[hit[1]]
-                              
-                              # Update results.
-                              nmemb <- length(members)
-                              name <- job$graph$nodes[hit]
-                              kd <- sprintf("%s, n=%d, p=%.2e", name, nmemb, pmin)
-                              cat(job$modules[j], ": ", kd, "\n", sep="")
-                              res <- rbind(res, tmp)
-                          }
-                          hiterror = TRUE # assume will only occur once
-                          return(hiterror)
-                      })
-        if(is.logical(p) & length(p)==1) break
+        p <- kda.analyze.exec(members, job$graph, job$nperm)
         mask <- which(p >= 0.0)
         if(length(mask) < 1) next
         
@@ -874,6 +848,7 @@ kda.analyze.exec <- function(memb, graph, nsim) {
         
         # First pass.
         x <- kda.analyze.simulate(obs[k], g, nmemb, nnodes, 200)
+        if(sum(is.na(x))==length(x)) next
         
         # Estimate preliminary P-value.
         param <- tool.normalize(x)
@@ -905,16 +880,33 @@ kda.analyze.simulate <- function(o, g, nmemb, nnodes, nsim) {
     # Simulate null distribution.
     nfalse <- 0
     x <- rep(NA, nsim)
-    for(n in 1:nsim) {
-        if(nfalse > 10) break
-        memb <- sample.int(nnodes, nmemb) 
-        x[n] <- kda.analyze.test(neigh, w, memb, nnodes)
-        if(is.na(x[n])) x[n] <- rnorm(1)
-        nfalse <- (nfalse + as.integer(x[n] >= o))
+    
+    deviation = FALSE
+    tries <- 0
+    while(!deviation){
+        if(tries>10) return(x) # unlikely to occur
+        tries <- tries + 1
+        for(n in 1:nsim) {
+            if(nfalse > 20) break # was 10
+            memb <- sample.int(nnodes, nmemb) 
+            x[n] <- kda.analyze.test(neigh, w, memb, nnodes)
+            if(is.na(x[n])) x[n] <- rnorm(1)
+            nfalse <- (nfalse + as.integer(x[n] >= o))
+        }
+        # Trim results.
+        x <- x[which(0*x == 0)]
+        
+        # check if values are sufficiently deviated
+        if(length(x[x>min(x)])==1){
+            deviation = TRUE
+        } else if(sd(x[x>min(x)])!=0 & length(unique(x))>4){
+            deviation = TRUE
+        } else {
+            x <- rep(NA, nsim)
+            nfalse <- 0
+        }
     }
     
-    # Trim results.
-    x <- x[which(0*x == 0)]
     return(x)
 }
 
@@ -1821,7 +1813,7 @@ ssea2kda.analyze <- function(job, moddata) {
     
     # Restore module identities.
     res$NGENES <- modsizes[res$MODULE]
-    res$NLOCI <- modlengths[res$MODULE]
+    res$NMARKER <- modlengths[res$MODULE]
     res$DENSITY <- moddensities[res$MODULE]
     res$MODULE <- job$modules[res$MODULE]
     return(res)
@@ -1849,7 +1841,11 @@ ssea.analyze <- function(job, trim_start=0.002, trim_end=0.998) {
     
     # Observed enrichment scores.
     db <- job$database
-    scores <- ssea.analyze.observe(db)
+    scores_int <- ssea.analyze.observe(db)
+    scores <- scores_int[["scores"]]
+    chis_sd <- scores_int[["chis_sd"]]
+    chis_se <- scores_int[["chis_se"]]
+    chis_variance <- scores_int[["chis_var"]]
     nmods <- length(scores)
     
     # Simulated scores.
@@ -1897,6 +1893,13 @@ ssea.analyze <- function(job, trim_start=0.002, trim_end=0.998) {
     res <- data.frame(MODULE=(1:nmods), stringsAsFactors=FALSE)
     res$P <- pvalues
     res$FREQ <- freq
+    res$ZSCORE <- z
+    res$CHI <- scores
+    res$CHI_SD <- chis_sd
+    res$CHI_SE <- chis_se
+    
+    job$zscores <- z
+    job$var <- chis_variance
     
     # Remove missing scores.
     targets <- which(0*scores == 0)
@@ -1928,15 +1931,16 @@ ssea.analyze.simulate <- function(db, observ, nperm, permtype, trim_start, trim_
         # Determine data rows.
         loci <- unique(loci)
         rows <- locus2row[loci]
-        nloci <- length(rows)
+        NMARKER <- length(rows)
         
         # Calculate total counts.
-        e <- (nloci/length(locus2row))*colSums(observed)
+        e <- (NMARKER/length(locus2row))*colSums(observed)
         o <- observed[rows,]
-        if(nloci > 1) o <- colSums(o)
+        if(NMARKER > 1) o <- colSums(o)
         
         # Estimate enrichment.
-        trim_scores[k] <- ssea.analyze.statistic(o, e)
+        int <- ssea.analyze.statistic(o, e)
+        trim_scores[k] <- int[["mean_z"]]
     }
 	cutoff=as.numeric(quantile(trim_scores,probs=c(trim_start,trim_end)))
 	gene_sel=which(trim_scores>cutoff[1]&trim_scores<cutoff[2])
@@ -2020,6 +2024,9 @@ ssea.analyze.observe <- function(db) {
     
     # Test every module.
     scores <- rep(NA, nmods)
+    chis_sd <- rep(NA, nmods)
+    chis_se <- rep(NA, nmods)
+    chis_variance <- rep(NA, nmods)
     for(k in 1:nmods) {
         genes <- mod2gen[[k]]
         
@@ -2031,18 +2038,30 @@ ssea.analyze.observe <- function(db) {
         # Determine data rows.
         loci <- unique(loci)
         rows <- locus2row[loci]
-        nloci <- length(rows)    
+        NMARKER <- length(rows)    
         
         # Calculate total counts.
-        #e <- nloci*expected
-		e <- (nloci/length(locus2row))*colSums(observed)
+        #e <- NMARKER*expected
+        e <- (NMARKER/length(locus2row))*colSums(observed)
         o <- observed[rows,]
-        if(nloci > 1) o <- colSums(o)
+        if(NMARKER > 1) o <- colSums(o)
         
         # Estimate enrichment.
-        scores[k] <- ssea.analyze.statistic(o, e)
+        # scores[k] <- ssea.analyze.statistic(o, e)
+        int <- ssea.analyze.statistic(o, e)
+        scores[k] <- int[["mean_z"]]
+        chis_sd[k] <- int[["chis_sd"]]
+        chis_se[k] <- int[["chis_se"]]
+        if("matrix" %in% class(int[["chis_var"]])){
+            chis_variance[k] <- NA
+        } else{
+            chis_variance[k] <- int[["chis_var"]]
+        }
     }
-    return(scores)
+    return(list("scores"=scores,
+                "chis_sd"=chis_sd,
+                "chis_se"=chis_se,
+                "chis_var"=chis_variance))
 }
 
 #----------------------------------------------------------------------------
@@ -2062,13 +2081,13 @@ ssea.analyze.randgenes <- function(db, targets, gene_sel) {
     #npool <- length(gene2loci)
     for(k in targets) {
         msize <- modsizes[[k]]
-        nloci <- modlengths[[k]]
+        NMARKER <- modlengths[[k]]
         
         # Collect pre-defined number of markers from random genes.
         loci <- integer()
         #genes <- sample.int(npool, (msize + 10))
 		genes <- sample(gene_sel, (msize + 10))
-        while(length(loci) < nloci) {
+        while(length(loci) < NMARKER) {
             for(i in genes) {
                 tmp <- gene2loci[[i]]
                 loci <- c(loci, tmp)
@@ -2078,17 +2097,19 @@ ssea.analyze.randgenes <- function(db, targets, gene_sel) {
         }
         
         # Determine data rows.
-        loci <- loci[1:nloci]
+        loci <- loci[1:NMARKER]
         rows <- locus2row[loci]
         
         # Calculate total counts.
-        #e <- nloci*expected
-		e <- (nloci/length(locus2row))*colSums(observed)
+        #e <- NMARKER*expected
+		e <- (NMARKER/length(locus2row))*colSums(observed)
         o <- observed[rows,]
-        if(nloci > 1) o <- colSums(o)
+        if(NMARKER > 1) o <- colSums(o)
         
         # Estimate enrichment.
-        z <- ssea.analyze.statistic(o, e)
+        # z <- ssea.analyze.statistic(o, e)
+        int <- ssea.analyze.statistic(o, e)
+        z <- int[["mean_z"]]
         scores <- c(scores, z)
     }
     return(scores)
@@ -2106,21 +2127,21 @@ ssea.analyze.randloci <- function(db, targets) {
     scores <- double()
     nrows <- length(locus2row)
     for(k in targets) {
-        nloci <- modlengths[[k]]
+        NMARKER <- modlengths[[k]]
         
         # Determine data rows.
-        loci <- sample.int(nrows, nloci)
+        loci <- sample.int(nrows, NMARKER)
         rows <- locus2row[loci]
         
         # Calculate total counts.
-        #e <- nloci*expected
-		e <- (nloci/length(locus2row))*colSums(observed)
+        #e <- NMARKER*expected
+		e <- (NMARKER/length(locus2row))*colSums(observed)
         o <- observed[rows,]
-        if(nloci > 1) o <- colSums(o)
+        if(NMARKER > 1) o <- colSums(o)
         
         # Estimate enrichment.
         z <- ssea.analyze.statistic(o, e)
-        scores <- c(scores, z)
+        scores <- c(scores, z[["mean_z"]])
     }
     
     # Return results.
@@ -2131,7 +2152,16 @@ ssea.analyze.randloci <- function(db, targets) {
 
 ssea.analyze.statistic <- function(o, e) {
     z <- (o - e)/(sqrt(e) + 1.0)
-    return(mean(z))
+    
+    chis <- z
+    chis_sd <- sd(chis)
+    chis_se <- sd(chis)/sqrt(length(chis))
+    chis_variance <- var(chis)
+    
+    return(list("mean_z"=mean(z),
+                "chis_sd"=chis_sd,
+                "chis_se"=chis_se,
+                "chis_var"=chis_variance))
 }
 #
 # Add internal positive control modules.
@@ -2169,17 +2199,19 @@ ssea.control <- function(job) {
     scores <- rep(NA, ngens)
     for(k in 1:ngens) {
         loci <- gene2loci[[k]]
-        nloci <- length(loci)
-        if(nloci < 1) next
+        NMARKER <- length(loci)
+        if(NMARKER < 1) next
         
         # Calculate total counts.
         rows <- locus2row[loci]
-        e <- nloci*expected
+        e <- NMARKER*expected
         o <- observed[rows,]
-        if(nloci > 1) o <- colSums(o)
+        if(NMARKER > 1) o <- colSums(o)
         
         # Estimate enrichment score.
-        scores[k] <- ssea.analyze.statistic(o, e)
+        #scores[k] <- ssea.analyze.statistic(o, e)
+        int <- ssea.analyze.statistic(o, e)
+        scores[k] <- int[["mean_z"]]
     }
     
     # Select top genes.
@@ -2295,7 +2327,7 @@ ssea.finish.genes <- function(job) {
     # Create data frame.
     res <- data.frame(GENE=(1:ngenes))
     res$SCORE <- db$genescores
-    res$NLOCI <- db$genesizes
+    res$NMARKER <- db$genesizes
     res$MARKER <- toploci
     res$VALUE <- topvals
     job$generesults <- res
@@ -2319,9 +2351,15 @@ ssea.finish.fdr <- function(job, jobs=NULL) {
     
     # Add module statistics.
     db <- job$database
-    res$NGENES <- db$modulesizes[res$MODULE]
-    res$NLOCI <- db$modulelengths[res$MODULE]
-    res$DENSITY <- db$moduledensities[res$MODULE]
+    if(is.null(jobs)){
+        res$NGENES <- db$modulesizes[res$MODULE]
+        res$NMARKER <- db$modulelengths[res$MODULE]
+        res$DENSITY <- db$moduledensities[res$MODULE]
+    } else{
+        res$NGENES <- job$db_df$modulesizes[match(res$MODULE, job$db_df$MODULE)]
+        res$NMARKER <- job$db_df$modulelengths[match(res$MODULE, job$db_df$MODULE)]
+        res$DENSITY <- job$db_df$moduledensities[match(res$MODULE, job$db_df$MODULE)]
+    }
     
     # Estimate false discovery rates.
     res$FDR <- tool.fdr(res$P)
@@ -2332,25 +2370,46 @@ ssea.finish.fdr <- function(job, jobs=NULL) {
     job$results <- res
     
     # Restore module names.
-    res$MODULE <- job$modules[res$MODULE]
+    if(is.null(jobs)){
+        res$MODULE <- job$modules[res$MODULE]
+    } else{
+        if(nrow(job$modinfo)>2){
+            job$modinfo$MODULE <- job$modules[job$modinfo$MODULE]
+            res$DESCR <- job$modinfo$DESCR[match(res$MODULE, job$modinfo$MODULE)]
+        } 
+    }
     
     # Prepare results for post-processing.
-    header <- rep("MODULE", 4)
+    header <- rep("MODULE", 3)
     header[[2]] <- paste("P.", job$label, sep="")
     header[[3]] <- paste("FDR.", job$label, sep="")
-    header[[4]] <- "DESCR"
-    res <- res[,c("MODULE", "P", "FDR", "DESCR")]
-    names(res) <- header
+    if(!is.null(jobs)){
+        res <- res[,c("MODULE", "P", "FDR", "Cochran.Q","Cochran.P","I2","DESCR")]
+        names(res) <- c(header,"Cochran.Q","Cochran.P","I2","DESCR")
+    } else{
+        res <- res[,c("MODULE", "P", "FDR","DESCR")]
+        names(res) <- c(header,"DESCR")
+    }
     
     # Make numbers nicer to look at.
     pvals <- character()
     fdrates <- character()
+    qstat <- character()
+    cpvals <- character()
     for(i in 1:nrow(res)) {
         pvals[i] <- sprintf("%.2e", res[i,2])
         fdrates[i] <- sprintf("%.4f", res[i,3])
+        if(!is.null(jobs)){
+            qstat[i] <- sprintf("%.2e", res[i,4])
+            cpvals[i] <- sprintf("%.2e", res[i,5])
+        }
     }
     res[,2] <- pvals
     res[,3] <- fdrates
+    if(!is.null(jobs)){
+        res[,4] <- qstat
+        res[,5] <- cpvals
+    }
     
     # Save P-values.
     jdir <- file.path(job$folder, "msea")
@@ -2383,9 +2442,21 @@ ssea.finish.fdr <- function(job, jobs=NULL) {
             }
             combine_res[,paste0(jobs[[i]]$label,".P")] = p
             combine_res[,paste0(jobs[[i]]$label,".FDR")] = fdr
+            ires_stat <- data.frame("MODULE"=jobs[[i]]$modules,
+                                    "Zscore"=jobs[[i]]$zscores,
+                                    "Chi_Var"=jobs[[i]]$var)
+            combine_res[,paste0(jobs[[i]]$label,".Z")] = ires_stat$Zscore[match(combine_res$MODULE,
+                                                                                ires_stat$MODULE)]
+            combine_res[,paste0(jobs[[i]]$label,".Chi_Var")] = ires_stat$Chi_Var[match(combine_res$MODULE,
+                                                                                       ires_stat$MODULE)]
         }
+        
+        
         combine_res$META.P = res[,paste("P.", job$label, sep="")]
         combine_res$META.FDR = res[,paste("FDR.", job$label, sep="")]
+        combine_res$Cochran.Q = res[,"Cochran.Q"]
+        combine_res$Cochran.P = res[,"Cochran.P"]
+        combine_res$I2 = res[,"I2"]
         if("DESCR" %in% colnames(res)) combine_res$DESCR = res$DESCR
         fname = paste(job$label, ".combined.results.txt", sep="")
         tool.save(frame=combine_res, file=fname, directory=jdir)
@@ -2395,7 +2466,7 @@ ssea.finish.fdr <- function(job, jobs=NULL) {
 
 #----------------------------------------------------------------------------
 
-ssea.finish.details <- function(job) {
+ssea.finish.details <- function(job, jobs=NULL) {
     
     # Find signficant modules.
     res <- job$results
@@ -2408,6 +2479,9 @@ ssea.finish.details <- function(job) {
     # Collect gene members of top modules.
     dtl <- data.frame()
     mod2genes <- job$database$module2genes
+    if(!is.null(jobs)){
+        names(mod2genes) <- job$modules
+    }
     for(k in res[mask,"MODULE"]) {
         genset <- mod2genes[[k]]
         tmp <- data.frame(MODULE=k, GENE=genset)
@@ -2433,10 +2507,12 @@ ssea.finish.details <- function(job) {
     dtl <- dtl[rows,]
     
     # Restore names and sort columns.
-    dtl$MODULE <- job$modules[dtl$MODULE]
+    if(is.null(jobs)){
+        dtl$MODULE <- job$modules[dtl$MODULE]
+    }
     dtl$GENE <- job$genes[dtl$GENE]
     dtl$MARKER <- job$loci[dtl$MARKER]
-    dtl <- dtl[,c("MODULE", "FDR", "GENE", "NLOCI", "MARKER", "VALUE", 
+    dtl <- dtl[,c("MODULE", "FDR", "GENE", "NMARKER", "MARKER", "VALUE", 
     "DESCR")]
     
     # Make numbers look nicer.
@@ -2489,7 +2565,6 @@ ssea.finish.details <- function(job) {
     # Save full results.
     jdir <- file.path(job$folder, "msea")
     fname <- paste(job$label, ".results.txt", sep="")
-    names(res)[5] = "NMARKER"
     tool.save(frame=res, file=fname, directory=jdir)
     
     return(job)
@@ -2548,6 +2623,13 @@ ssea.meta <- function(jobs, label, folder) {
         meta$moddata <- rbind(meta$moddata, moddata)
         meta$gendata <- rbind(meta$gendata, gendata)
         meta$locdata <- rbind(meta$locdata, locdata)
+        
+        # get data for het stats
+        job$zscores[is.nan(job$zscores)] <- 0
+        job$var[is.na(job$var)] <- 1
+        forhet[[paste0("Job_",k)]] <- data.frame("MODULE"=job$modules,
+                                                 "Zscore"=job$zscore,
+                                                 "Var_Inv"=1/(job$var))
     }
     
     # Remove duplicate rows (non-numeric values only).
@@ -2602,8 +2684,8 @@ ssea.meta <- function(jobs, label, folder) {
     meta$quantiles <- seq(0.5, (1.0 - 1.0/mu), length.out=10)
     
     # Calculate hit counts.
-    nloci <- length(meta$loci)
-    hits <- ssea.prepare.counts(meta$locdata, nloci, meta$quantiles)
+    NMARKER <- length(meta$loci)
+    hits <- ssea.prepare.counts(meta$locdata, NMARKER, meta$quantiles)
     meta$database <- c(meta$database, hits)
     
     # Check result values.
@@ -2701,8 +2783,8 @@ ssea.prepare <- function(job) {
     }
     
     # Calculate hit counts.
-    nloci <- length(job$loci)
-    hits <- ssea.prepare.counts(job$locdata, nloci, job$quantiles)
+    NMARKER <- length(job$loci)
+    hits <- ssea.prepare.counts(job$locdata, NMARKER, job$quantiles)
     db <- c(db, hits)
     
     # Return results.
@@ -2786,7 +2868,7 @@ ssea.prepare.structure <- function(moddata, gendata, nmods, ngens) {
 
 #----------------------------------------------------------------------------
 
-ssea.prepare.counts <- function(locdata, nloci, quantiles) {
+ssea.prepare.counts <- function(locdata, NMARKER, quantiles) {
     
     # Make sure there are at least two points to prevent
     # R automagic on matrices to mess things up.
@@ -2794,7 +2876,7 @@ ssea.prepare.counts <- function(locdata, nloci, quantiles) {
     
     # Create mapping table.
     nrows <- nrow(locdata)
-    locmap <- rep(0, nloci)
+    locmap <- rep(0, NMARKER)
     locmap[locdata$MARKER] <- (1:nrows)
     
     # Convert values to standardized range.
@@ -3526,6 +3608,19 @@ tool.coalesce.merge <- function(data, ncore) {
     }
     return(res)
 }
+
+#---------------------------------------------------------------------------
+
+tool.cochranQ<-function(x, weights) {
+    bar.x <- sum(weights*x)/sum(weights)
+    Q <- sum(weights*((x-bar.x)^2))
+    k <- length(x)
+    p.value <- pchisq(Q, k-1, lower.tail = FALSE)
+    output <- c(Q,p.value,as.integer(k-1))
+    names(output) <- c("Q", "p-value", "df")
+    return(output)
+}
+
 # 
 # Written by Ville-Petteri Makinen 2013
 #
