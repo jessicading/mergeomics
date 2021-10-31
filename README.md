@@ -16,39 +16,40 @@ Developed by: Ville-Petteri Makinen, Le Shu, Yuqi Zhao, Zeyneb Kurt, Bin Zhang, 
 ## About
 Mergeomics is an open source R-based pipeline for multi-dimensional integration of omics data to identify disease-associated pathways and networks. Genes whose network neighborhoods are over-represented with disease associated genes are deemed key drivers and can be targeted in further mechanistic studies.
 
-More information can be found in the [paper](https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-016-3198-9), [documentation](http://bioconductor.org/packages/release/bioc/html/Mergeomics.html), and [web server](http://mergeomics.research.idre.ucla.edu).
+![abstract figure](https://github.com/jessicading/mergeomics/blob/master/Abstract.jpg?raw=true)
+
+More information can be found in the [methods paper](https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-016-3198-9), [documentation](http://bioconductor.org/packages/release/bioc/html/Mergeomics.html), [web server](http://mergeomics.research.idre.ucla.edu), and [web server paper](https://academic.oup.com/nar/article/49/W1/W375/6287846).
 
 ## Tutorial
-This tutorial describes the workflow for running the Mergeomics pipeline with individual scripts (using Mergeomics functions) and requires a minimum level of coding experience. This method allows for more customization and finetuning of the parameters. This is a response to the R package currently being under construction. 
+This tutorial illustrates the workflow for running the Mergeomics pipeline which includes Marker Dependency Filtering (MDF), Marker Set Enrichment Analysis (MSEA), and Key Driver Analysis (KDA). For those who prefer a web interface, please use our [web server](http://mergeomics.research.idre.ucla.edu).
 
-For each step, example input and output files are given, the script, and discussion of the parameters.
+Input and output file examples and individual scripts for each step are given. A more streamlined workflow is displayed at the end which uses wrapper functions in the Mergeomics_utils.R source function.
 
-There are example files for each input and output. 
 
 #### Notes
-All files used are tab delimited text files.
-
-All scripts except MDF need to source "Mergeomics.R".
+- A new version of the Mergeomics R package will be released which fixes minor bugs and improves results output. We suggest to using `source(Mergeomics_Release1.19.0_beta.R)` to use the updated functions.
+- All input files should be tab delimited .txt files.
+- The term 'marker' is used to refer to any type of biological marker including loci, methylation/epigenetic sites, transcripts/genes, proteins, metabolites, etc.
 
 ### Marker Dependency Filtering
 
-Marker dependency filtering (MDF) removes dependent markers and prepares an optimized marker and gene file for marker set enrichment analysis (MSEA). You must have the mdprune software installed for this script. The inputs are enumerated below. 
+Marker dependency filtering (MDF) removes dependent markers and prepares an optimized marker and gene file for marker set enrichment analysis (MSEA). Dependency between markers can be a result of linkage disequilibrium, for example. Download the mdprune executable in this repository and provide the path to the program in the script below. This is a C++ program and requires a Linux distribution. If you cannot obtain the environment, MDF can be run using our [web server](http://mergeomics.research.idre.ucla.edu) (Run Mergeomics > Individual GWAS Enrichment).
 
-As of writing, MDF is done mostly for GWAS data (to correct for linkage disequilibrium). If starting from transcriptomic, proteomic, epigenomic, or metabolomic data, start from MSEA (it is recommended to use the `runMSEA` function to simplify the analysis). 
+For epigenomics, transcriptomics, proteomics, or metabolomics data, MSEA can be run as a first step (it is recommended to use the `runMSEA` function to simplify the analysis). MDF can be skipped for GWAS as well but it is not recommended.
 
 #### Inputs
-1. ```MARFILE```: Disease/Phenotype Associated Data <br/> 
-This file must have two columns named 'LOCUS' and 'VALUE' where value denotes the association to the trait of interest (p-value). The p-values must be negative log (base 10) transformed (-log P). The higher the value, the stronger the association.
+1. ```MARFILE```: Disease/Phenotype association data <br/> 
+This file must have two columns named 'MARKER' and 'VALUE' where value denotes the strength of the association to the trait. This is usually -log10 p-values but can be other values such as effect size or fold change. Higher values must indicate higher association.
 ```
 MARKER             VALUE
 rs4747841         0.1452
 rs4749917         0.1108
 rs737656          1.3979
 ```
-2. ```GENFILE```: Mapping File to Connect Markers from Association Data to Genes<br/>
-(ex. eQTLs and/or Encode Information)
+2. ```GENFILE```: Mapping file to connect markers from association data to genes<br/>
+(eQTLs, distance based, etc.)
 ```
-GENE              LOCUS
+GENE              MARKER
 TSPAN6            rs1204389
 TNMD              rs113630520
 SCYL3             rs72691775
@@ -114,12 +115,12 @@ rs10003931        1.3696e+00
 ### Marker Set Enrichment Analysis
 Marker set enrichment analysis (MSEA) detects pathways and networks affected by multidimensional molecular markers (e.g., SNPs, differential methylation sites) associated with a pathological condition. The pipeline can be concluded after MSEA is run, or the results can be used directly in wKDA. 
 
-MSEA can also be used for gene level enrichment analysis (functional annotation of DEGs, transcription factor target enrichment analysis) with different parameter settings. This is outlined below. Alternatively, you can use the `runMSEA` wrapper function without specifying a mapping_file.
+MSEA can also be used for gene level enrichment analysis (functional annotation of DEGs, transcription factor target enrichment analysis). This is outlined below. See the `runMSEA` function from Mergeomics_utils.R for a wrapper function of this script.
 
 #### Inputs
 1.```label```: output file name<br/>
 2.```folder```: output folder <br/>
-3.```genfile``` and ```locfile```: Gene and loci files (respectively) from MDF (see outputs #1 and #2 from MDF section). For gene level enrichment analysis, a "fake" gene (mapping) file can be made. <br/>
+3.```genfile``` and ```marfile```: Gene and marker files (respectively) from MDF (see outputs #1 and #2 from MDF section). For gene level enrichment analysis, a "fake" gene (mapping) file can be made. <br/>
 4. ```modfile```: module/pathway file with headers 'MODULE' and 'GENE'
 ```
 MODULE             GENE
@@ -138,17 +139,16 @@ Obesity_positive.  GWAS Catalog     Positive control gene set for Obesity
 7. ```nperm```: Set to 2000 for exploratory analysis, set to 10000 for formal analysis<br/>
 8. ```maxoverlap```: Default is 0.33. Set to 1 for gene level enrichment analysis.
 
-#### MSEA Script
+#### MSEA Script for GWAS/EWAS Enrichment
 <em>See `runMSEA` in Mergeomics_utils.R for a wrapper function of this.</em>
 ```R
 # source functions or load library
-# library(Mergeomics)
-source("Mergeomics.R")
+source("Mergeomics_Release1.19.0_beta.R")
 job.ssea <- list()
-job.ssea$label <- "DIAGRAMstage2_T2D.Adipose_Subcutaneous"
+job.ssea$label <- "gwas_enrichment"
 job.ssea$folder <- "../results/"
-job.ssea$genfile <- "./Data/Adipose_Subcutaneous/genes.txt"
-job.ssea$marfile <- "./Data/Adipose_Subcutaneous/loci.txt"		
+job.ssea$genfile <- "eqtls.txt" # marker to gene file
+job.ssea$marfile <- "gwas_loci.txt" # marker association file		
 job.ssea$modfile <- "../resources/genesets/kbr.mod.txt"
 job.ssea$inffile <- "../resources/genesets/kbr.info.txt"
 job.ssea$permtype <- "gene"
@@ -157,9 +157,31 @@ job.ssea$maxoverlap <- 0.33
 job.ssea <- ssea.start(job.ssea)
 job.ssea <- ssea.prepare(job.ssea)
 job.ssea <- ssea.control(job.ssea)
-job.ssea <- ssea.analyze(job.ssea,trim_start=0.005,trim_end=0.995)
+job.ssea <- ssea.analyze(job.ssea)
 job.ssea <- ssea.finish(job.ssea)
 ```
+
+#### MSEA Script for TWAS, PWAS, MWAS Enrichment
+If markers are already functional genes, then a marker to gene mapping file is not needed. If no marker to gene mapping file is provided, TWAS/PWAS/MWAS enrichment will be assumed and the appropriate parameters will be set.
+
+```R
+# source functions or load library
+source("Mergeomics_Release1.19.0_beta.R")
+job.ssea <- list()
+job.ssea$label <- "DEGs_enrichment"
+job.ssea$folder <- "../results/"
+job.ssea$marfile <- "DEGs.txt" # marker association file
+job.ssea$modfile <- "../resources/genesets/kbr.mod.txt"
+job.ssea$inffile <- "../resources/genesets/kbr.info.txt"
+job.ssea$nperm <- 10000
+job.ssea <- ssea.start(job.ssea)
+job.ssea <- ssea.prepare(job.ssea)
+job.ssea <- ssea.control(job.ssea)
+job.ssea <- ssea.analyze(job.ssea)
+job.ssea <- ssea.finish(job.ssea)
+```
+
+
 #### Outputs
 1. Details file<br/>
 
@@ -359,5 +381,3 @@ runMSEA(association_file = "./GWAS/Kunkle_AD.txt",
         marker_set="./HP_MSEA_DEGs.txt")
 ```
 
-#### Extra notes
-'LOCUS' is synonymous to 'MARKER'. In the scripts and ldprune program provided in this github page, 'LOCUS' needs to be the column name as opposed to 'MARKER'. We hope to change to 'MARKER' soon to reflect that SNP, gene, protein, and metabolite information can be used. To clarify, 'LOCUS' can contain <b>any</b> type of information, though LOCUS implies location in genome (SNP). 
