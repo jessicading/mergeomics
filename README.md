@@ -23,7 +23,7 @@ More information can be found in the [methods paper](https://bmcgenomics.biomedc
 ## Tutorial
 This tutorial illustrates the workflow for running the Mergeomics pipeline which includes Marker Dependency Filtering (MDF), Marker Set Enrichment Analysis (MSEA), and Key Driver Analysis (KDA). For those who prefer a web interface, please use our [web server](http://mergeomics.research.idre.ucla.edu).
 
-Input and output file examples and individual scripts for each step are given. A more streamlined workflow is displayed at the end which uses wrapper functions in the Mergeomics_utils.R source function.
+Input and output file examples and individual scripts for each step are given. A more streamlined workflow is displayed at the end which uses wrapper functions in the Mergeomics_utils.R source functions.
 
 
 #### Notes
@@ -38,8 +38,8 @@ Marker dependency filtering (MDF) removes dependent markers and prepares an opti
 For epigenomics, transcriptomics, proteomics, or metabolomics data, MSEA can be run as a first step (it is recommended to use the `runMSEA` function to simplify the analysis). MDF can be skipped for GWAS as well but it is not recommended.
 
 #### Inputs
-1. ```MARFILE```: Disease/Phenotype association data <br/> 
-This file must have two columns named 'MARKER' and 'VALUE' where value denotes the strength of the association to the trait. This is usually -log10 p-values but can be other values such as effect size or fold change. Higher values must indicate higher association.
+1. ```MARFILE```: Disease/Phenotype marker association data (summary statistics)<br/> 
+This file must have two columns named 'MARKER' and 'VALUE' where value denotes the strength of the association to the trait. This is usually -log10 p-values but can be other values such as effect size or fold change. Higher values must indicate higher association. The entire marker association file, including nonsignificant associations, should be used.
 ```
 MARKER             VALUE
 rs4747841         0.1452
@@ -64,10 +64,33 @@ rs4475691         rs3905286           0.921467
 ```
 4. ```OUTPATH```: Output Directory
 5. ```NTOP```: Top proportion of associations to consider <br/>
-To increase result robustness and conserve memory and time, it is sometimes useful to limit the number of markers. Use 0.5 as default; Try 0.2 for GWAS with high SNP numbers; Try 1.0 for GWAS with low SNP numbers
+To increase result robustness and conserve memory and time, it is sometimes useful to limit the number of markers. Use 0.5 as default; Try 0.2 for GWAS with high SNP numbers; Try 1.0 for GWAS with low SNP numbers.
+
+#### Run MDF
+
+Download mdprune by cloning this repository using `git clone` or directly from this page.
+
+Give execution permissions to the program.
+```bash
+chmod +x mdprune
+```
+Run MDF using function from Mergeomics_utils.R which produces and runs a bash script for MDF. Contents of the bash script that is run is shown below.
+
+```R
+source("Mergeomics_utils.R")
+runMDF(MARFILE = "GWAS/GWAS_MSEA/Kunkle_AD.txt", # marker association file
+       GENFILE = "mapping/MONOCYTES_EQTL.txt", # marker to gene mapping file
+       LNKFILE = "linkage/LD50.1000G.CEU.txt", # marker dependency file
+       NTOP = 0.2, # top proportion of marker association file to consider
+       ld_threshold = 50, # dependency (correlation/R2) cutoff, used to label output
+       mdprune = "mdprune" # path to mdprune program
+       )
+```
+
+The default output directory is MSEA/Data/.
 
 #### MDF Script (bash)
-<em>See `runMDF` in Mergeomics_utils.R for a wrapper function of this.</em>
+`runMDF` from above code produces and runs the below script.
 ```bash
 #!/bin/bash
 #
@@ -78,10 +101,10 @@ To increase result robustness and conserve memory and time, it is sometimes usef
 # Written by Ville-Petteri Makinen
 #
 #
-MARFILE="../GWAS/DIAGRAMstage1_T2D.txt"
-GENFILE="../resources/mapping/esnps/Adipose_Subcutaneous.txt"
-LNKFILE="../resources/linkage/LD50.1000G.CEU.txt"
-OUTPATH="../MSEA/Data/DIAGRAMstage1_T2D.Adipose_Subcutaneous/"
+MARFILE="GWAS/GWAS_MSEA/Kunkle_AD.txt"
+GENFILE="mapping/MONOCYTES_EQTL.txt"
+LNKFILE="linkage/LD50.1000G.CEU.txt"
+OUTPATH="MSEA/Data/Kunkle_AD.MONOCYTES_EQTL/"
 NTOP=0.2
 echo -e "MARKER\tVALUE" > /tmp/header.txt
 nice sort -r -g -k 2 $MARFILE > /tmp/sorted.txt
@@ -91,26 +114,29 @@ nice head -n $NMAX /tmp/sorted.txt > /tmp/top.txt
 cat /tmp/header.txt /tmp/top.txt > /tmp/subset.txt
 
 # Remove SNPs in LD and create input files for SSEA.
-nice /u/home/j/jading/project-xyang123/GWAS/MDPRUNE/mdprune /tmp/subset.txt $GENFILE $LNKFILE $OUTPATH
+nice mdprune /tmp/subset.txt $GENFILE $LNKFILE $OUTPATH
 
 ```
 
 #### Outputs
-These files serve as inputs for MSEA.
-1. Gene file
-```
-GENE              MARKER
-RESP18	          rs7600417
-RESP18	          rs35083292
-ADPRH	          rs60643107
-```
-2. Loci file
+These files serve as marker dependency corrected inputs for MSEA.
+1. Marker association file (will be named for ex. top20.ld50.m.txt)
 ```
 MARKER             VALUE
 rs10000012	  1.9776e+00
 rs1000274	  9.4846e-01
 rs10003931        1.3696e+00
 ```
+
+2. Marker to gene mapping file (will be named for ex. top20.ld50.g.txt)
+```
+GENE              MARKER
+RESP18	          rs7600417
+RESP18	          rs35083292
+ADPRH	          rs60643107
+```
+
+The output directory is named by the trait (marker association/GWAS file name) and mapping type. This can be changed with the `label` parameter in `runMDF`. The names of the output files have the top percentage of markers (top20 for ex.) and marker dependency (linkage disequilibrium) (md50 for ex.) appended to the beginning. These are the parameters that can affect the performance of MSEA. Users may want to try different top percentages (100, 50, or 20) and marker dependency thresholds (0.5 or 0.7).
 
 ### Marker Set Enrichment Analysis
 Marker set enrichment analysis (MSEA) detects pathways and networks affected by multidimensional molecular markers (e.g., SNPs, differential methylation sites) associated with a pathological condition. The pipeline can be concluded after MSEA is run, or the results can be used directly in wKDA. 
@@ -119,8 +145,8 @@ MSEA can also be used for gene level enrichment analysis (functional annotation 
 
 #### Inputs
 1.```label```: output file name<br/>
-2.```folder```: output folder <br/>
-3.```genfile``` and ```marfile```: Gene and marker files (respectively) from MDF (see outputs #1 and #2 from MDF section). For gene level enrichment analysis, a "fake" gene (mapping) file can be made. <br/>
+2.```folder```: output folder name<br/>
+3.```marfile``` and ```genfile```: marker association and marker to gene mapping files (respectively) from MDF (see outputs from MDF section). A `genfile` is not needed for transcriptome-wide and proteome-wide studies as markers are already genes. <br/>
 4. ```modfile```: module/pathway file with headers 'MODULE' and 'GENE'
 ```
 MODULE             GENE
@@ -128,16 +154,19 @@ rctm0573           APP
 M5940              AMPH
 Obesity_positive   CD53 
 ```
-5. ```inffile```: description file for modules with headers 'MODULE', 'SOURCE', and 'DESCR'
+5. ```inffile```: description file for modules with headers 'MODULE', 'SOURCE', and 'DESCR' (optional)
 ```
 MODULE             SOURCE           DESCR
 rctm0573           reactome         Inflammasomes
 M5940              biocarta         Endocytotic role of NDK, Phosphins and Dynamin
-Obesity_positive.  GWAS Catalog     Positive control gene set for Obesity 
+Obesity_positive   GWAS Catalog     Positive control gene set for Obesity 
 ```
-6. ```permtype```: This is critical. For GWAS enrichment analysis, use “gene”. For gene level enrichment analysis, use "locus"<br/>
-7. ```nperm```: Set to 2000 for exploratory analysis, set to 10000 for formal analysis<br/>
-8. ```maxoverlap```: Default is 0.33. Set to 1 for gene level enrichment analysis.
+6. ```permtype```: permutation type. This is critical. For GWAS enrichment analysis, use “gene”. For gene level enrichment analysis (epigenome-wide, transcriptome-wide, proteome-wide), use "marker". "marker" can be used for GWAS enrichment but may be bias towards genes mapped from many markers.<br/>
+7. ```nperm```: number of permutations. Set to 2000 for exploratory analysis, set to 10000-20000 for formal analysis<br/>
+8. ```maxoverlap```: overlap ratio threshold for merging genes with shared markers. Default is 0.33. Set to 1 for gene level enrichment analysis (epigenome-wide, transcriptome-wide, proteome-wide).
+9. ```trim```: percentile taken from the beginning and end for trimming away a defined proportion of genes with significant trait association to avoid signal inflation of null background in gene permutation. Default is 0.002. Set to 0 to consider all signals in null background.
+
+If no ```genfile``` is provided, transcriptome-wide/proteome-wide enrichment is assumed, and permtype and maxoverlap is automatically set to "marker" and 1, respectively.
 
 #### MSEA Script for GWAS/EWAS Enrichment
 <em>See `runMSEA` in Mergeomics_utils.R for a wrapper function of this.</em>
@@ -145,15 +174,16 @@ Obesity_positive.  GWAS Catalog     Positive control gene set for Obesity
 # source functions or load library
 source("Mergeomics_Release1.19.0_beta.R")
 job.ssea <- list()
-job.ssea$label <- "gwas_enrichment"
+job.ssea$label <- "Kunkle_AD.MONOCYTES_EQTL"
 job.ssea$folder <- "../results/"
-job.ssea$genfile <- "eqtls.txt" # marker to gene file
-job.ssea$marfile <- "gwas_loci.txt" # marker association file		
+job.ssea$genfile <- "MSEA/Data/Kunkle_AD.MONOCYTES_EQTL/top20.ld50.g.txt" # marker to gene file
+job.ssea$marfile <- "MSEA/Data/Kunkle_AD.MONOCYTES_EQTL/top20.ld50.m.txt" # marker association file		
 job.ssea$modfile <- "../resources/genesets/kbr.mod.txt"
 job.ssea$inffile <- "../resources/genesets/kbr.info.txt"
-job.ssea$permtype <- "gene"
+job.ssea$permtype <- "gene" # for EWAS, set this to "marker"
 job.ssea$nperm <- 10000
-job.ssea$maxoverlap <- 0.33
+job.ssea$maxoverlap <- 0.33 # for EWAS, set this to 1
+job.ssea$trim <- 0.002 # default is 0.002, set to 0 for no trimming, users can try increasing to 0.005 to dampen inflation further
 job.ssea <- ssea.start(job.ssea)
 job.ssea <- ssea.prepare(job.ssea)
 job.ssea <- ssea.control(job.ssea)
@@ -162,7 +192,7 @@ job.ssea <- ssea.finish(job.ssea)
 ```
 
 #### MSEA Script for TWAS, PWAS, MWAS Enrichment
-If markers are already functional genes, then a marker to gene mapping file is not needed. If no marker to gene mapping file is provided, TWAS/PWAS/MWAS enrichment will be assumed and the appropriate parameters will be set.
+If markers are genes, then a marker to gene mapping file is not needed. If no marker to gene mapping file is provided, TWAS/PWAS/MWAS enrichment will be assumed and the appropriate parameters will be set.
 
 ```R
 # source functions or load library
