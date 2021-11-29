@@ -1,0 +1,35 @@
+KDA visualization (kda2cytoscape)
+	Fix bug mislabeling subnetwork KDs as ‘Ellipse’, not ‘Diamond’
+	Add border color to KDs representing the top module that it regulates
+	Lighten default colors
+	Nodes colored not only by select modules (was only being colored by the module that the top KDs per module were regulators of)
+	Add original weight of input network to cytoscape edges file
+	Denote all significant key drivers of top KDs subnetwork including those whose subnetworks are not shown in the top KD subnetwork and add column to nodes file stating whether the KD subnetwork is shown  
+
+KDA analysis (kda.analyze.simulate)
+	Fix ks.test error that occurs when there is no standard deviation of simulated enrichment values (all the same value)
+
+MSEA for non-GWAS (ssea.start)
+	If user does not provide the genfile (mapping file), then assume the run is non-GWAS (eg., TWAS, PWAS) and create “fake” mapping file and set appropriate parameters
+
+Meta output (ssea.finish.fdr)
+	Output summary of significance values across all studies
+
+Meta analysis (ssea.meta)
+	Add Cochran's Q and I2 statistic based on test statistics calculated across the quantiles
+
+MSEA to KDA file preparation (ssea2kda)
+	Handling of one or two modules passed to KDA
+	Take out control gene sets
+	Add back genes that were lost from merging modules
+
+MSEA output (ssea.analyze, ssea.finish.details, and ssea.finish.fdr)
+	Add top markers, top corresponding values to .results.txt output file
+	Add z scores, chi values, chi standard deviations, and chi standard errors.
+
+Module merging (tool.coalesce)
+	Add edge case handling
+
+MSEA significance testing (ssea.analyze.simulate)
+	Allow complete inclusion of all genes in simulation (no trimming)
+	
