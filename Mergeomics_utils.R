@@ -1,68 +1,68 @@
-#source("/u/project/xyang123/xyang123-NOBACKUP/jading/Mergeomics.R")
-#setwd("/u/flashscratch/j/jading/10X_Single_Cell/AD_HYP/")
-#library(ggplot2) # used for GWAS_MSEA_Screen
+# Wrapper functions for Mergeomics pipeline
 
 # Marker Dependency Filtering
 # 
-# Filters markers based on dependency (such as linkage disequilibrium) file given. Prepares
-# files for MSE (mapping and loci files)
+# Filters markers based on dependency (such as linkage disequilibrium). 
+# Prepares files for MSEA (marker association and mapping files)
 #
-# @param MARFILE: association file with 'LOCUS' and 'VALUE' headers. Value reflects strength of association.
-#                 (for example, can use -log10 pvalues)
-# @param GENFILE: file maping loci to genes - 'GENE' 'LOCUS'
-# @param LNKFILE: marker dependency file 'LOCUSa' 'LOCUSb' 'WEIGHT'
-# @param trait_name: optional, becomes part of the output directory name with mapping_name
-# @param mapping_name: optional, becomes part of the output directory name with trait_name
-# @param nmax: percent of associations to consider
-# @param ld_threshold: corresponds to LD threshold used - must be changed if not 50%, 
-#                     used to name output files
-# @param ldprune: path to ldprune program
+# @param MARFILE: association file with 'MARKER' and 'VALUE' headers. Value 
+#                 reflects strength of association. (e.g., -log10 pvalues)
+# @param GENFILE: file maping loci to genes - 'GENE' 'MARKER'
+# @param LNKFILE: marker dependency file 'MARKERa' 'MARKERb' 'WEIGHT'
+# @param label: directory name containing result files
+# @param NTOP: percent of associations to consider
+# @param md_threshold: corresponds to dependency (correlation) threshold, used
+#                      to name output files (optional)
+# @param mdprune: path to mdprune program
 #
-# @return creates directory with name that combines trait and mapping information and that 
-#         contains the mapping (-.g.txt) and loci (-.l.txt) file with percent associations
-#         and ld threshold information appended (ex. 50.50.g.txt)
+# @return void, creates directory containing the marker (_.m.txt) and mapping 
+#         (_.g.txt) file with percent associations and dependency threshold (if 
+#         provided) appended (ex. top50.md50.g.txt)
 #
 # @examples
 # runMDF(MARFILE = "./GWAS/Kunkle_AD.txt",
 #        GENFILE = "./mapping/Brain_Hippocampus.eQTL.txt", 
 #        LNKFILE = "./linkage/LD50.1000G.CEU.txt", 
 #        output_dir = "./MSEA/Data/",
-#        ldprune = "./MDPRUNE/ldprune")
+#        mdprune = "./MDPRUNE/ldprune")
 #
-runMDF <-function(MARFILE,
-                  GENFILE,
-                  LNKFILE,
-                  trait_name=NULL, 
-                  mapping_name=NULL, 
-                  output_dir="./MSEA/Data/",
-                  nmax=0.5,
-                  ld_threshold=50,
-                  editFiles=FALSE,
+runMDF <-function(marker_associations,
+                  marker_mapping,
+                  marker_dependency,
+                  label=NULL, 
+                  output_dir="Data/",
+                  n_top=0.5,
+                  md_threshold=NULL, # correlation cutoff for output file name
+                  edit_files=FALSE,
                   mdprune="mdprune"){
   
   # change to appropriate headers
-  if(editFiles){
-    system(paste0("sed -i \"1s/.*/GENE\\tMARKER/\" ",GENFILE))
-    system(paste0("sed -i \"1s/.*/MARKERa\\tMARKERb\\tWEIGHT/\" ",LNKFILE))
+  if(edit_files){
+    system(paste0("sed -i \"1s/.*/MARKER\\VALUE/\" ",marker_associations))
+    system(paste0("sed -i \"1s/.*/GENE\\tMARKER/\" ",marker_mapping))
+    system(paste0("sed -i \"1s/.*/MARKERa\\tMARKERb\\tWEIGHT/\" ",marker_dependency))
   }
   
-  if(is.null(trait_name) & is.null(mapping_name)){
-    trait_name = unlist(strsplit(MARFILE,"/"))[length(unlist(strsplit(MARFILE,"/")))]
+  if(is.null(label)){
+    trait_name = unlist(strsplit(marker_associations,"/"))[length(unlist(strsplit(marker_associations,"/")))]
     trait_name = gsub(".txt","",trait_name)
     
-    mapping_name = unlist(strsplit(GENFILE,"/"))[length(unlist(strsplit(GENFILE,"/")))]
+    mapping_name = unlist(strsplit(marker_mapping,"/"))[length(unlist(strsplit(marker_mapping,"/")))]
     mapping_name = gsub(".txt","",mapping_name)
+    
+    label=paste(output_dir, "/",trait_name, '.', mapping_name, sep="")
+  } else {
+    label=paste(output_dir, "/",label)
   }
   
-  label=paste(output_dir,trait_name,'.',mapping_name,sep="")
   ifelse(!dir.exists(label), dir.create(label, recursive = TRUE),FALSE)
   
   bash_file <- file(paste0(label,".bash"))
-  writeLines(c(paste('MARFILE="',MARFILE,'"',sep=''),
-               paste('GENFILE="',GENFILE,'"',sep=''),
-               paste('LNKFILE="', LNKFILE,'"',sep=""),
+  writeLines(c(paste('MARFILE="',marker_associations,'"',sep=''),
+               paste('GENFILE="',marker_mapping,'"',sep=''),
+               paste('LNKFILE="', marker_dependency,'"',sep=""),
                paste('OUTPATH="',output_dir,trait_name,'.',mapping_name,'/"',sep=""),
-               paste('NTOP=',nmax,sep=""),
+               paste('NTOP=',n_top,sep=""),
                paste("echo -e \"MARKER\\tVALUE\" > /tmp/header.txt"),
                paste("nice sort -r -g -k 2 $MARFILE > /tmp/sorted.txt"),
                paste("NMARKER=$(wc -l < /tmp/sorted.txt)"),
@@ -73,275 +73,378 @@ runMDF <-function(MARFILE,
              bash_file)
   close(bash_file)
   
-  ifelse(!dir.exists(output_dir), dir.create(output_dir, recursive = TRUE),FALSE)
+  if(!is.null(md_threshold)){
+    name=paste0("top", as.character(n_top*100), ".md",md_threshold)
+  } else {
+    name=paste0("top", as.character(n_top*100))
+  }
   
-  name=paste(as.character(nmax*100), ld_threshold, sep=".")
+  marker_associations <- paste0(label,"/",name,".m.txt")
+  marker_mapping <- paste0(label,"/",name,".g.txt")
+  
   system(paste0("bash ", paste0(label,".bash")))
-  system(paste("mv ",label,"/genes.txt ",label,"/",name,".g.txt",sep=""))
-  system(paste("mv ",label,"/marker.txt ",label,"/",name,".m.txt",sep=""))
+  system(paste0("mv ",label,"/genes.txt ",marker_mapping))
+  system(paste0("mv ",label,"/marker.txt ",marker_associations))
+  
+  job <- list()
+  job$marker_associations <- marker_associations
+  job$marker_mapping <- marker_mapping
+  return(job)
 }
 
 # Marker Set Enrichment Analysis
 # 
-# Finds significantly enriched marker sets in marker associations
+# Finds significantly enriched marker sets from marker associations 
+# (summary statistics of genome-, epigenome-, transcriptome-, proteome-, 
+#  metabolome-wide)
 #
-# @param MDF_output_dir: output directory created from MDF that contains the corrected
-#                        mapping and association files. association_file and mapping_file
-#                        do not need to be specified if this is set.
-# @param association_file: marker association file (gwas, transcriptome, proteome, 
-#                          epigenome,metabolome) 'LOCUS' 'VALUE'
-# @param mapping_file: needed if GWAS file used in association_file. not needed otherwise
-# @param marker_set: marker sets to test for enrichment 'MODULE' 'GENE'
-# @param info: information for marker_set file 'MODULE' 'SOURCE' 'DESCR'
-# @param permtype: permutation type. automatically set as "locus" when doing gene level 
-#                  enrichment analysis (not from GWAS)
-# @param maxoverlap: corresponds to LD threshold used - must be changed if not 50%, 
-#                     used to name output files
-# @param ldprune: path to ldprune program
+# @param marker_associations: marker associations file path 
+#                             'MARKER' 'VALUE' headed tab delimited .txt file
+# @param marker_mapping: marker to gene mapping file path. Required for GWAS
+#                        and EWAS. Not needed for TWAS/PWAS
+#                        'GENE' 'MARKER' headed tab delimited .txt file
+# @param marker_set: marker set file path 
+#                    'MODULE' 'GENE' headed tab delimited .txt file
+# @param marker_set_info: marker set info file path (optional)
+#                         'MODULE' 'DESCR' headed tab delimited .txt file
+# @param output_dir: output directory name 
+# @param label: prefix appended to result file names
+# @param permtype: permutation type. automatically set as "marker" if mapping
+#                  file not provide (gene level enrichment analysis, i.e. not GWAS)
+# @param nperm:
+# @param maxoverlap: overlap ratio threshold for merging genes with shared markers. 
+# @param max_module_genes: maximum number of genes for module to be included
+# @param min_module_genes: minimum number of genes for module to be included
+# @param trim: percentile taken from the beginning and end for trimming away a 
+#              defined proportion of genes with significant trait association to 
+#              avoid signal inflation of null background in gene permutation
+# @param seed: seed for random number generator
+# @param return_job: whether to return job list at the end of analysis
 #
-# @return creates directory with name that combines trait and mapping information and that 
-#         contains the mapping (-.g.txt) and loci (-.l.txt) file with percent associations
-#         and ld threshold information appended (ex. 50.50.g.txt)
+# @return job list with inputs and outputs, if return_job = TRUE. produces result
+#         files, most notably _.results.txt which contains the full results including
+#         top genes, corresponding markers and their association values. full list
+#         of gene contributing to the marker set enrichment is in _.details.txt.
 #
 # @examples
-# runMDF(MARFILE = "./GWAS/Kunkle_AD.txt",
-#        GENFILE = "./mapping/Brain_Hippocampus.eQTL.txt", 
-#        LNKFILE = "./linkage/LD50.1000G.CEU.txt", 
-#        output_dir = "./MSEA/Data/",
-#        ldprune = "./MDPRUNE/ldprune")
+# runMSEA(marker_associations = "./GWAS/Kunkle_AD.txt",
+#         marker_mapping = "./mapping/Brain_Hippocampus.eQTL.txt", 
+#         marker_set = "./linkage/LD50.1000G.CEU.txt")
 #
-runMSEA <- function(MDF_output_dir = NULL,
-                    association_file,
-                    mapping_file=NULL,
+runMSEA <- function(job=NULL,
+                    marker_associations,
+                    marker_mapping=NULL,
                     marker_set, 
-                    output_dir="./MSEA/Results", 
+                    marker_set_info=NULL,
+                    output_dir="Results", 
                     label=NULL, 
-                    info=NULL,
-                    permtype = "gene",
-                    maxoverlap = .33,
+                    permtype="gene",
                     nperm=10000,
-                    max_module_genes=5000,
-                    trim = 0.002,
-                    return_job = FALSE,
-                    perc_top_associations=NULL){
+                    maxoverlap=.33,
+                    max_module_genes=500,
+                    min_module_genes=10,
+                    trim=0.002,
+                    seed=1,
+                    return_job=TRUE){
   
   # either gene level enrichment or skipped MDF
+  if(!is.null(job)){
+    marker_associations <- job$marker_associations
+    marker_mapping <- job$marker_mapping
+  }
   
-  
-  if(is.null(MDF_output_dir)){
-    association_orig = association_file
-    association <- read.delim(association_file, stringsAsFactors = FALSE)
-    association = association[order(association$VALUE, decreasing = TRUE),]
-    write.table(association,file = association_file, 
-                row.names = FALSE, quote = FALSE, sep = "\t")
-    if(!is.null(perc_top_associations)){ # if skipped MDF and doing gwas enrichment
-      num = round(nrow(association)*perc_top_associations)
-      association = association[1:num,]
-      mapping_orig = mapping_file
-      mapping <- read.delim(mapping_file, stringsAsFactors = FALSE)
-      association = association[association$LOCUS %in% mapping$LOCUS,]
-      
-      association_file = gsub(pattern="//",replacement = "/", association_file)
-      association_lab <- unlist(strsplit(association_file,"/"))[length(unlist(strsplit(association_file,"/")))]
-      association_lab <- gsub(".txt", "", association_lab)
-      write.table(association,
-                  file = paste0(association_lab,"_for_MSEA_top",perc_top_associations*100,".txt"), 
-                  row.names = FALSE, quote = FALSE, sep = "\t")
-      association_file <- paste0(association_lab,"_for_MSEA_top",perc_top_associations*100,".txt")
-      
-      # make new mapping file
-      mapping = mapping[mapping$LOCUS %in% association$LOCUS,]
-      mapping_file = gsub(pattern="//",replacement = "/", mapping_file)
-      mapping_lab <- unlist(strsplit(mapping_file,"/"))[length(unlist(strsplit(mapping_file,"/")))]
-      mapping_lab <- gsub(".txt", "", mapping_lab)
-      write.table(mapping,
-                  file = paste0(mapping_lab,"_for_MSEA.txt"), 
-                  row.names = FALSE, quote = FALSE, sep = "\t")
-      mapping_file <- paste0(mapping_lab,"_for_MSEA.txt")
-    }
-    if(is.null(mapping_file)){ # if doing gene level enrichment analysis
-      marker_associations <- read.delim(association_file, stringsAsFactors = FALSE)
-      mapping_file = data.frame("GENE"=marker_associations$LOCUS, 
-                                "LOCUS" = marker_associations$LOCUS, 
-                                stringsAsFactors = FALSE)
-      write.table(mapping_file, "./genfile_for_geneEnrichment.txt", 
-                  row.names = FALSE, quote = FALSE, sep = "\t")
-      mapping_file <- "./genfile_for_geneEnrichment.txt"
-      permtype = "locus"
-      maxoverlap = 1
-      association_file = gsub(pattern="//",replacement = "/", association_file)
-      association_lab <- unlist(strsplit(association_file,"/"))[length(unlist(strsplit(association_file,"/")))]
-      association_lab <- gsub(".txt", "", association_lab)
-      label = association_lab
-    }else{
-      if(is.null(label)){
-        association_orig = gsub(pattern="//",replacement = "/", association_orig)
-        association_lab <- unlist(strsplit(association_orig,"/"))[length(unlist(strsplit(association_orig,"/")))]
-        association_lab <- gsub(".txt", "", association_lab)
-        mapping_orig = gsub(pattern="//",replacement = "/", mapping_orig)
-        mapping_lab <- unlist(strsplit(mapping_orig,"/"))[length(unlist(strsplit(mapping_orig,"/")))]
-        mapping_lab <- gsub(".txt", "", mapping_lab)
-        label = paste(association_lab, mapping_lab, sep = ".")
-      }
-    }
-  }else{
-    association_file = list.files(MDF_output_dir, 
-                                  full.names = TRUE)[grep(".m.txt",
-                                                          list.files(MDF_output_dir, 
-                                                                     full.names = TRUE))]
-    mapping_file = list.files(MDF_output_dir,
-                              full.names = TRUE)[grep(".g.txt",
-                                                      list.files(MDF_output_dir,
-                                                                 full.names = TRUE))]
-    if(is.null(label)){
-      association_file = gsub(pattern="//",replacement = "/", association_file)
-      association_lab <- unlist(strsplit(association_file,"/"))[length(unlist(strsplit(association_file,"/")))-1]
-      association_lab <- gsub(".txt", "", association_lab)
-      label = association_lab
-    }
+  if(is.null(label)){
+    label = "msea"
   }
   
   ifelse(!dir.exists(output_dir), dir.create(output_dir, recursive = TRUE),FALSE)
   
-  ass <- read.delim(association_file, stringsAsFactors = FALSE)
-  colnames(ass) <- c("MARKER","VALUE")
-  write.table(ass, file = association_file, row.names = FALSE, quote = FALSE, sep = "\t")
-  
-  map <- read.delim(mapping_file, stringsAsFactors = FALSE)
-  colnames(map) <- c("GENE","MARKER")
-  write.table(map, file = mapping_file, row.names = FALSE, quote = FALSE, sep = "\t")
-  
   job.ssea <- list()
+  job.ssea$marfile <- marker_associations
+  if(!is.null(marker_mapping)){
+    job.ssea$genfile <- marker_mapping
+  } else {
+    permtype <- "marker"
+    maxoverlap <- 1
+  }
   job.ssea$label <- label
   job.ssea$folder <- output_dir
-  job.ssea$genfile <- mapping_file
-  job.ssea$marfile <- association_file #marfile in package, locfile in Mergeomics.R functions
   job.ssea$modfile <- marker_set
-  if(!is.null(info)){
-    job.ssea$inffile <- info
+  if(!is.null(marker_set_info)){
+    job.ssea$inffile <- marker_set_info
   }
-  job.ssea$permtype <- permtype	#optional
-  job.ssea$maxgenes <- max_module_genes	#optional
-  job.ssea$nperm <- nperm	#optional
-  job.ssea$maxoverlap <- maxoverlap
+  job.ssea$permtype <- permtype
+  job.ssea$nperm <- nperm
+  job.ssea$maxoverlap <- maxoverlap 
+  job.ssea$trim <- trim
+  job.ssea$seed <- seed
   job.ssea <- ssea.start(job.ssea)
   job.ssea <- ssea.prepare(job.ssea)
   job.ssea <- ssea.control(job.ssea)
-  job.ssea <- ssea.analyze(job.ssea,trim_start=trim,trim_end=(1-trim))
+  job.ssea <- ssea.analyze(job.ssea)
   job.ssea <- ssea.finish(job.ssea)
   
   if(return_job) return(job.ssea)
 }
 
+# Meta-MSEA
+# 
+# Finds significantly enriched marker sets from marker associations 
+# (summary statistics of genome-, epigenome-, transcriptome-, proteome-, 
+#  metabolome-wide)
+#
+# @param marker_associations: marker associations file path 
+#                             'MARKER' 'VALUE' headed tab delimited .txt file
+# @param marker_mapping: marker to gene mapping file path. Required for GWAS
+#                        and EWAS. Not needed for TWAS/PWAS
+#                        'GENE' 'MARKER' headed tab delimited .txt file
+# @param marker_set: marker set file path 
+#                    'MODULE' 'GENE' headed tab delimited .txt file
+# @param marker_set_info: marker set info file path (optional)
+#                         'MODULE' 'DESCR' headed tab delimited .txt file
+# @param output_dir: output directory name 
+# @param label: prefix appended to result file names
+# @param permtype: permutation type. automatically set as "marker" if mapping
+#                  file not provide (gene level enrichment analysis, i.e. not GWAS)
+# @param nperm:
+# @param maxoverlap: overlap ratio threshold for merging genes with shared markers. 
+# @param max_module_genes: maximum number of genes for module to be included
+# @param min_module_genes: minimum number of genes for module to be included
+# @param trim: percentile taken from the beginning and end for trimming away a 
+#              defined proportion of genes with significant trait association to 
+#              avoid signal inflation of null background in gene permutation
+# @param seed: seed for random number generator
+# @param return_job: whether to return job list at the end of analysis
+#
+# @return job list with inputs and outputs, if return_job = TRUE. produces result
+#         files, most notably _.results.txt which contains the full results including
+#         top genes, corresponding markers and their association values. full list
+#         of gene contributing to the marker set enrichment is in _.details.txt.
+#
+# @examples
+# runMSEA(marker_associations = "./GWAS/Kunkle_AD.txt",
+#         marker_mapping = "./mapping/Brain_Hippocampus.eQTL.txt", 
+#         marker_set = "./linkage/LD50.1000G.CEU.txt")
+#
+runMetaMSEA <- function(msea_input_list, 
+                        marker_set, 
+                        marker_set_info=NULL, 
+                        output_dir="Results",
+                        label="meta",
+                        return_job=TRUE){
+  
+  default_params = list(permtype="gene", nperm=10000, maxoverlap=0.33,
+                        max_module_genes=500, min_module_genes=10,
+                        trim=0.002, seed=1)
+  
+  meta_job_list <- list()
+  
+  for(msea in names(msea_input_list)){
+    set_params <- names(msea_input_list[[msea]])
+    set_params <- setdiff(set_params, c("marker_associations","marker_mapping"))
+    params <- default_params
+    for(p in set_params){ # overwrite default params
+      params[[p]] <- msea_input_list[[msea]][[p]]
+    }
+    
+    job.ssea <- list()
+    job.ssea$label <- msea
+    job.ssea$folder <- "individual_msea_results_for_meta"
+    job.ssea$marfile <- msea_input_list[[msea]][["marker_associations"]]
+    
+    for(p in names(params)){
+      job.ssea[[p]] <- params[[p]]
+    }
+
+    if(!is.null(msea_input_list[[msea]][["marker_mapping"]])){
+      job.ssea$genfile <- msea_input_list[[msea]][["marker_mapping"]]
+    } else {
+      job.ssea[["permtype"]] <- "marker"
+      job.ssea[["maxoverlap"]] <- 1
+    }
+    
+    job.ssea$modfile <- marker_set
+    if(!is.null(msea_input_list[[msea]][["marker_set_info"]])){
+      job.ssea$inffile <- marker_set_info
+    }
+    
+    cat("\nRunning MSEA for", msea, "\n")
+    job.ssea <- ssea.start(job.ssea)
+    job.ssea <- ssea.prepare(job.ssea)
+    job.ssea <- ssea.control(job.ssea)
+    job.ssea <- ssea.analyze(job.ssea)
+    job.ssea <- ssea.finish(job.ssea)
+    
+    meta_job_list[[msea]] <- job.ssea
+  }
+  
+  meta_job_list <- ssea.meta(jobs = meta_job_list, 
+                             label = label, 
+                             folder = output_dir)
+
+  if(return_job) return(meta_job_list)
+}
+
+# Key Driver Analysis
+# 
+# Identifies key drivers with network neighbors significantly enriched for
+# input module genes
+#
+# @param job: completed msea job to retrieve significant modules for KDA
+# @param MSEA_results: path to MSEA result .txt to extract significant modules for KDA
+#                      ('MODULE' and 'FDR' columns required - _.results.txt file)
+# @param MSEA_fdr_cutoff: FDR cutoff to include modules in the MSEA
+# @param marker_sets: marker sets file path if setting MSEA_results parameter
+# @param merge_modules: whether to merge redundant modules - TRUE or FALSE
+# @param merge_rcutoff: minimum ratio of overlap to merge modules
+# @param nodes: either a 'MODULE' 'NODE' file or vector of genes 
+# @param marker_set_file: file to retrieve module genes if MSEA_results is set 
+#                         'MODULE' 'GENE' headed tab delimited .txt file
+# @param marker_set_info_file: marker sets info file (optional)
+#                              'MODULE' 'DESCR' headed tab delimited .txt file
+# @param network: path to network file
+#                 'HEAD' 'TAIL' 'WEIGHT' headed tab delimited .txt file
+# @param label: prefix appended to result file names
+# @param output_dir: directory storing result files
+# @param edgefactor: influence of node strengths, 0.0 no influence, 1.0 full influence
+# @param maxoverlap: maximum allowed overlap between two key driver neighborhoods
+# @param minsize: minimum module size
+# @param mindegree: minimum node degree to qualify as a hub
+# @param maxdegree: maximum node degree to include
+# @param depth: search depth for subgraph search
+# @param direction: use 0 for undirected, -1 for downstream and 1 for upstream
+# @param nperm: number of permutations
+# @param seed: seed for random number generator
+# @param nKDs_subnetwork: maximum number of drivers per module to generate subnetwork
+# @param return_job: whether to return job list at the end of analysis
+# @param save_job: whether to save job list at the end of analysis
+#
+# @return job list with inputs and outputs, if return_job = TRUE. produces result
+#         files, most notably _.results.txt which contains the full results of
+#         they drivers. produces cytoscape-ready network files of top key drivers
+#
+# @examples
+# kda_job <- runKDA(job=msea_job, 
+#                   network="network/bayesian_network_brain.txt")  
+#
 # nodes_file can either be .results.txt file from MSEA or a 'MODULE' 'NODE' file
-runKDA <- function(MSEA_results_dir = NULL,
-                   nodes_file, # can either be .results.txt file from MSEA or a 'MODULE' 'NODE' file
-                   marker_set=NULL,
+runKDA <- function(job=NULL,
+                   MSEA_results=NULL,
+                   MSEA_fdr_cutoff=0.05,
+                   marker_sets=NULL,
+                   merge_modules=FALSE, 
+                   merge_rcutoff=.33,
+                   nodes=NULL, # 'MODULE' 'NODE' file
+                   marker_set_file=NULL,
+                   marker_set_info_file=NULL,
                    network, 
-                   name = NULL,
-                   trim = c(".results.txt",".50.20",".50.50",".txt",".results"), 
-                   merge = FALSE, 
-                   rcutoff=.33, 
-                   info=NULL,
-                   edgefactor = 0,
-                   depth = 1,
-                   direction = 0,
-                   nperm = 10000,
-                   nKDs_show = NULL,
-                   return_job = FALSE
+                   label=NULL,
+                   output_dir ="Results",
+                   maxoverlap=0.33,
+                   minsize=20,
+                   mindegree="automatic",
+                   maxdegree="automatic",
+                   edgefactor=0,
+                   depth=1,
+                   direction=0,
+                   nperm=10000,
+                   seed=1,
+                   nKDs_subnetwork=5,
+                   return_job=TRUE,
+                   save_job = TRUE
 ){
   
   job.kda <- list()
-  job.kda$label<-"wKDA"
-  
-  if(!is.null(MSEA_results_dir)){
-    results = list.files(MSEA_results_dir, 
-                                  full.names = TRUE)[grep(".results.txt",
-                                                          list.files(MSEA_results_dir, 
-                                                                     full.names = TRUE))]
-    if(length(results)>1) cat("Error: More than one MSEA results files detected.\n")
-  } else{
-    results = nodes_file
-  }
-
-  
-  result <- read.delim(results, stringsAsFactors = FALSE)
-  if(ncol(result)>4){ # result file from MSEA
-    sig_mods = result$MODULE[result$FDR<0.05]
-    sig_modfile = data.frame(stringsAsFactors = FALSE)
-    
-    modfile <- read.delim(marker_set, stringsAsFactors = FALSE)
-    
-    for(mod in sig_mods){
-      sig_modfile = rbind(sig_modfile, modfile[modfile$MODULE==mod,])
+  job.kda$folder <- output_dir
+  if(is.null(label)){
+    if(!is.null(job)){
+      if(label=="msea"){
+        label <- "wKDA"
+      } else {
+        label <- job$label
+      }
+    } else {
+      label <- "wKDA"
     }
-    colnames(sig_modfile) <- c("MODULE","NODE")
-    write.table(sig_modfile, "Significant_module_nodes.txt", row.names = FALSE, quote = FALSE, sep = "\t")
-    job.kda$modfile <- "./Significant_module_nodes.txt"
-    forMerging = data.frame("MODULE"=unique(sig_modfile$MODULE), stringsAsFactors = FALSE)
   }
-  else if(ncol(result)==4){ # output from merge modules
-    result <- result[,c("MODULE","NODE")]
-    write.table(result, "nodes_file_forKDA.txt", row.names = FALSE, quote = FALSE, sep = "\t")
-    job.kda$modfile <- "nodes_file_forKDA.txt"
-  }
-  else{
-    if(length(intersect(colnames(result),c("MODULE","NODE")))!=2){
-      colnames(result) <- c("MODULE","NODE")
-      write.table(result, "nodes_file_forKDA.txt", row.names = FALSE, quote = FALSE, sep = "\t")
-      job.kda$modfile <- "nodes_file_forKDA.txt"
-    }else{
-      job.kda$modfile <- nodes_file
+  
+  if(!is.null(nodes)){
+    if(length(nodes)>1){ # if vector of nodes/genes
+      modfile <- data.frame("MODULE"="Input nodes",
+                            "NODE"=nodes)
+      write.table(modfile, "temp/nodes_file_forKDA.txt", row.names = FALSE, quote = FALSE, sep = "\t")
+      job.kda$modfile <- "temp/nodes_file_forKDA.txt"
+    } else { # if MODULE NODE file
+      job.kda$modfile <- nodes
+    }
+  } else {
+    if(!is.null(job)){
+      marker_set_file <- job$modfile
+      MSEA_results <- job$resultfile
+      marker_set_info_file <- job$inffile
+      job.kda$msea_results <- job$msea_results
     }
     
-    forMerging <- read.delim(nodes_file, stringsAsFactors = FALSE)
-    forMerging = data.frame("MODULE"=unique(forMerging$MODULE), stringsAsFactors = FALSE)
-  }
-  
-  if(merge){
-    if(ncol(result)==2){
-      modfile <- result
-      colnames(modfile) <- c("MODULE","GENE")
-      write.table(modfile,"modfile_forMerging.txt",
-                  row.names = FALSE, quote = FALSE, sep = "\t")
-      marker_set = "modfile_forMerging.txt"
-    }else{
-      modfile <- read.delim(marker_set, stringsAsFactors = FALSE)
+    if(is.null(marker_set_file)) stop("Marker set needed!")
+    
+    modfile <- read.delim(marker_set_file, stringsAsFactors = FALSE)
+    
+    if(!is.null(MSEA_results)){
+      result <- read.delim(MSEA_results, stringsAsFactors = FALSE)
+      modules = result$MODULE[result$FDR<MSEA_fdr_cutoff]
+      modules = modules[modules!="_ctrlA"]
+      modules = modules[modules!="_ctrlB"]
+      if(length(modules)==0){
+        if(MSEA_fdr_cutoff>=0.25){
+          stop("No modules left after applying MSEA FDR cutoff.")
+        } else {
+          cat("\nNo modules left after applying MSEA FDR cutoff.\n")
+          cat("Changing FDR cutoff to 0.25, please interpret results accordingly.\n")
+          MSEA_fdr_cutoff = 0.25
+          result <- read.delim(MSEA_results, stringsAsFactors = FALSE)
+          modules = result$MODULE[result$FDR<MSEA_fdr_cutoff]
+          modules = modules[modules!="_ctrlA"]
+          modules = modules[modules!="_ctrlB"]
+          if(length(modules)==0){
+            stop("\nNo modules left after applying a 0.25 MSEA FDR cutoff.\n")
+          }
+        }
+      }
+      modfile <- modfile[modfile$MODULE %in% modules,]
+      
+    } else if(!is.null(marker_sets)) {
+      modfile <- modfile[modfile$MODULE %in% marker_sets,]
+    } else{
+      stop("No input nodes provided!")
     }
     
-    if(is.null(info)){
-      infofile = data.frame("MODULE"=unique(modfile$MODULE), "SOURCE"=unique(modfile$MODULE), "DESCR"=unique(modfile$MODULE))
-      write.table(infofile,"infofile_forMerging.txt", row.names = FALSE, quote = FALSE, sep = "\t")
-      merge_modules(name = "nodes", modules_df = forMerging, rcutoff = rcutoff, output_Dir = "./", 
-                    modfile_path = marker_set, infofile_path = "./infofile_forMerging.txt")
+    if(merge_modules){
+      dir.create("merged_modules")
+      merge_modules(msea_res = modfile$MODULE, 
+                    rcutoff = merge_rcutoff, 
+                    output_Dir = "merged_modules/", 
+                    label = label,
+                    modfile_path = marker_set_file, 
+                    infofile_path = marker_set_info_file)
+      job.kda$modfile <- paste0("merged_modules/",label,".merged_mod.txt")
+      
+    } else {
+      dir.create("temp")
+      colnames(modfile) <- c("MODULE","NODE")
+      write.table(modfile, paste0("temp/",label,"_nodes_file_forKDA.txt"), row.names = FALSE, quote = FALSE, sep = "\t")
+      job.kda$modfile <- paste0("temp/",label,"_nodes_file_forKDA.txt")
     }
-    else{
-      merge_modules(name = "nodes", modules_df = forMerging, rcutoff = rcutoff, 
-                    output_Dir = "./", modfile_path = marker_set, infofile_path = info)
-    }
-    job.kda$modfile <- "merged_nodes.mod.txt"
   }
   
-  nodes_name = nodes_file
-  nodes_name = unlist(strsplit(nodes_name, split = "/"))[length(unlist(strsplit(nodes_name, split = "/")))]
-  for(i in trim){
-    nodes_name = gsub(i,"",nodes_name)
+  if(!is.null(marker_set_info_file)){
+    job.kda$inffile <- marker_set_info_file
   }
   
-  network_name = gsub(".txt","",unlist(strsplit(network, split = "/"))[length(unlist(strsplit(network, split = "/")))])
-  
-  cat("\nNow analyzing:",nodes_name, "with", network_name, "\n")
-  
-  if(is.null(name)){
-    name = paste(nodes_name, network_name,sep = "_")
-  }
-  
-  job.kda$folder<- name ## parent folder for results
+  job.kda$label <- label
   
   ## Input a network
   ## columns: TAIL HEAD WEIGHT
   job.kda$netfile <- network
-  
   
   ## "0" means we do not consider edge weights while 1 is opposite.
   job.kda$edgefactor <- edgefactor
@@ -352,12 +455,12 @@ runKDA <- function(MSEA_results_dir = NULL,
   job.kda$direction <- direction
   job.kda$nperm <- nperm
   
-  moddata <- tool.read(job.kda$modfile)
-  mod.names <- unique(moddata$MODULE)
-  moddata <- moddata[which(!is.na(match(moddata$MODULE, mod.names))),]
-  ## save this to a temporary file and set its path as new job.kda$modfile:
-  tool.save(moddata, "subsetof.supersets.txt")
-  job.kda$modfile <- "subsetof.supersets.txt"
+  # moddata <- tool.read(job.kda$modfile)
+  # mod.names <- unique(moddata$MODULE)
+  # moddata <- moddata[which(!is.na(match(moddata$MODULE, mod.names))),]
+  # ## save this to a temporary file and set its path as new job.kda$modfile:
+  # tool.save(moddata, "subsetof.supersets.txt")
+  # job.kda$modfile <- "subsetof.supersets.txt"
   
   ## Run KDA
   job.kda <- kda.configure(job.kda)
@@ -366,117 +469,21 @@ runKDA <- function(MSEA_results_dir = NULL,
   job.kda <- kda.analyze(job.kda)
   job.kda <- kda.finish(job.kda)
   
-  if(!is.null(nKDs_show)){
-    job.kda <- kda2cytoscape(job.kda, ndrivers = nKDs_show)
-  }
-  else{
-    job.kda <- kda2cytoscape(job.kda)
+  if(save_job){
+    saveRDS(job.kda, file = paste0(output_dir,"/",label, ".kda.job.rds"))
   }
   
-  if(return_job){
-    saveRDS(job.kda, file = paste0(name, "_kda_job.rds"))
-  }
-}
-
-GWAS_MSEA_screen <- function(GWAS_dir="/u/project/xyang123/xyang123-NOBACKUP/icestrik/public_gwas/MSEA_Gtex_v7/",
-                             SNP_map_method = "Adipose_Subcutaneous",
-                             geneset="", 
-                             info = NULL,
-                             ntop = 50,
-                             ld_threshold = 50,
-                             output_dir = "./GWAS_Screen_Results/",
-                             output_name = "Results",
-                             max_module_genes = 5000,
-                             trim = .005,
-                             nperm = 10000,
-                             permtype = "gene",
-                             nGWASshow = 20){
-  traits = list.files(GWAS_dir)[grep(SNP_map_method, list.files(GWAS_dir))]
-  trim_traits = c()
-  for(trait in traits){
-    trim_traits = append(trim_traits, unlist(strsplit(trait, split = ".", fixed = TRUE))[1])
-  }
-  traits = trim_traits
-  rm(trim_traits)
-  para = paste0(ld_threshold,".",ntop)
-  mapping = SNP_map_method
+  job.kda <- kda2cytoscape(job.kda, ndrivers = nKDs_subnetwork)
+  job.kda <- kda2cytoscape(job.kda)
   
-  ifelse(!dir.exists(output_dir), dir.create(output_dir), FALSE)
-  setwd(output_dir)
-  for(trait.item in traits){
-    for (item.1 in mapping){
-      for (item.2 in para){
-        job.ssea <- list()
-        job.ssea$label <- paste(trait.item,item.1,item.2,sep=".")
-        job.ssea$folder <- output_dir
-        job.ssea$genfile <- paste(GWAS_dir,trait.item,".",item.1,"/",item.2,".g.txt",sep="")
-        job.ssea$locfile <- paste(GWAS_dir,trait.item,".",item.1,"/",item.2,".l.txt",sep="")		
-        job.ssea$modfile <- geneset
-        if(!is.null(info)){
-          job.ssea$inffile <- info
-        }
-        job.ssea$permtype <- permtype	#optional
-        job.ssea$maxgenes <- max_module_genes	#optional
-        job.ssea$nperm <- nperm	#optional
-        job.ssea <- ssea.start(job.ssea)
-        job.ssea <- ssea.prepare(job.ssea)
-        job.ssea <- ssea.control(job.ssea)
-        job.ssea <- ssea.analyze(job.ssea,trim_start=trim,trim_end=(1-trim))
-        job.ssea <- ssea.finish(job.ssea)
-      }
-    }
-  }
+  if(return_job) return(job.kda)
   
-  # make plot of results
-  result_files <- list.files(paste0(output_dir, "msea/"))[grep("results", list.files(paste0(output_dir, "msea/")))]
-  results_df = data.frame(stringsAsFactors = FALSE)
-  for(result in result_files){
-    msea <- read.delim(paste0(output_dir,"msea/", result), stringsAsFactors = FALSE)
-    study = unlist(strsplit(result, split = ".", fixed = TRUE))[1]
-    temp = data.frame("Study" = study, 
-                      "Module" = msea$MODULE,
-                      "FDR" = msea$FDR)
-    results_df = rbind(results_df, temp)
-  }
-  
-  results_df = results_df[results_df$Module!="_ctrlA",]
-  results_df = results_df[results_df$Module!="_ctrlB",]
-  
-  results_df$log10FDR <- -log10(results_df$FDR)
-  results_df <- results_df[order(results_df$log10FDR, decreasing = TRUE),]
-  # get top 10 GWAS studies 
-  show_GWAS = unique(results_df$Study)[1:nGWASshow]
-  
-  toPlot = data.frame(stringsAsFactors = FALSE)
-  for(gwas in show_GWAS){
-    toPlot = rbind(toPlot, results_df[results_df$Study==gwas,])
-  }
-  
-  toPlot$FDR = toPlot$FDR/nGWASshow
-  toPlot$log10FDR <- -log10(toPlot$FDR)
-  
-  heat <- ggplot(toPlot,aes(x=Module,y = Study, fill=log10FDR)) + geom_tile(colour="gray") + 
-    scale_fill_gradientn(colors = c("white", "red")) + theme_bw() +
-    theme(axis.text.x = element_text(angle = 90, size = 15, vjust = 0, hjust = 0, 
-                                     margin = margin(t=0,b=0,r=0,l=0)), 
-          axis.text.y =  element_text(size = 15),
-          panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank(), panel.border = element_blank(),
-          axis.title = element_text(size=15, face = "bold")) + 
-    labs(fill=expression(-log[10]~FDR)) +
-    scale_x_discrete(position = "top") 
-  
-  pdf(paste0(output_name,"_heatmap.pdf"), width = 10, height = 7)
-  print(heat)
-  dev.off()
-  
-  write.table(results_df,paste0(output_name,"_data.txt"), row.names = FALSE, quote = FALSE, sep = "\t")
 }
 
 merge_modules <- function(msea_res, 
                           rcutoff=0.33, 
                           fdr_cutoff=NULL,
-                          output_Dir="Merged_modules/", 
+                          output_dir="Merged_modules/", 
                           modfile_path, 
                           infofile_path=NULL,
                           label=""){
@@ -548,12 +555,12 @@ merge_modules <- function(msea_res,
       }
     }
     
-    if(!dir.exists(output_Dir)) dir.create(output_Dir)
+    if(!dir.exists(output_dir)) dir.create(output_dir)
     
-    write.table(moddata, paste0(output_Dir,"/merged_", mdfile),  
+    write.table(moddata, paste0(output_dir,"/merged_", mdfile),  
                 sep='\t', col.names=T, row.names=F, quote=F) 
     if(!is.null(infofile_path)){
-      write.table(moddatainfo, paste0(output_Dir,"/merged_", mifile),  
+      write.table(moddatainfo, paste0(output_dir,"/merged_", mifile),  
                   sep='\t', col.names=T, row.names=F, quote=F) 
     }
   }
