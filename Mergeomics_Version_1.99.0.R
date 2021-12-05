@@ -544,7 +544,7 @@ depth=1) {
     
     modmember_nonkd <- which(noddata$URL!="" & noddata$SHAPE!="Diamond")
     noddata$SIZE[modmember_nonkd] <- 100
-    kd_sn_not_shown <- which(noddata$KD_subnetwork_shown=="YES")
+    kd_sn_not_shown <- which(noddata$KD_subnetwork_shown=="NO")
     noddata$SHAPE[kd_sn_not_shown] <- "Diamond"
     noddata$SIZE[kd_sn_not_shown] <- 100
     noddata$LABELSIZE[kd_sn_not_shown] <- 20
@@ -826,6 +826,11 @@ kda2cytoscape.identify <- function(dat, varname, labels) {
 kda.analyze <- function(job) {
     set.seed(job$seed)
     
+    jdir <- file.path(job$folder, "kda")
+    log <- paste0(jdir,"/",job$label,".kda.log")
+    sink(log, append=TRUE, split=TRUE)
+    on.exit(sink(), add = TRUE)
+    
     cat("\nAnalyzing network...\n")
     nmods <- length(job$modules)
     
@@ -920,7 +925,7 @@ kda.analyze.simulate <- function(o, g, nmemb, nnodes, nsim) {
         if(tries>10) return(x) # unlikely to occur
         tries <- tries + 1
         for(n in 1:nsim) {
-            if(nfalse > 10) break # was 10
+            if(nfalse > 20) break # was 10
             memb <- sample.int(nnodes, nmemb) 
             x[n] <- kda.analyze.test(neigh, w, memb, nnodes)
             if(is.na(x[n])) x[n] <- rnorm(1)
@@ -1017,11 +1022,22 @@ kda.analyze.test <- function(neigh, w, members, nnodes) {
 # Written by Ville-Petteri Makinen 2013
 #
 kda.configure <- function(plan) {
-    cat("\nKDA Version:12.7.2015\n")
-    cat("\nParameters:\n")
-    plan$stamp <- Sys.time()
     if(is.null(plan$folder)) stop("No parent folder.")
     if(is.null(plan$label)) stop("No job label.")
+    jdir <- file.path(plan$folder, "kda")
+    fname <- paste(plan$label, ".hubs.txt", sep="")
+    
+    if(!dir.exists(jdir)) dir.create(path=jdir, recursive=TRUE)
+    if(file.access(jdir, 2) != 0)
+        stop("Cannot access '" + plan$folder + "'.")
+    
+    log <- file(paste0(jdir,"/",plan$label,".kda.log"))
+    sink(log, append=TRUE, split=TRUE)
+    on.exit(sink(), add = TRUE)
+    
+    cat("\nKDA Version:12.01.2021\n")
+    cat("\nParameters:\n")
+    plan$stamp <- Sys.time()
     if(is.null(plan$netfile)) stop("No network file.")
     if(is.null(plan$modfile)) stop("No module file.")
     
@@ -1071,6 +1087,12 @@ kda.configure <- function(plan) {
 # Written by Ville-Petteri Makinen 2013
 #
 kda.finish <- function(job) {
+    
+    jdir <- file.path(job$folder, "kda")
+    log <- paste0(jdir,"/",job$label,".kda.log")
+    sink(log, append=TRUE, split=TRUE)
+    on.exit(sink(), add = TRUE)
+    
     cat("\nFinishing results...\n")
     if (nrow(job$results)==0){
         cat("No Key Driver Found!!!!")
@@ -1081,14 +1103,17 @@ kda.finish <- function(job) {
         
         # Save full results.
         res <- kda.finish.save(res, job)
+        job$kda_results <- res
         
         # Create a simpler file for viewing.
         res <- kda.finish.trim(res, job)
         
         # Create a summary file of top hits.
         res <- kda.finish.summarize(res, job)
+            
         return(job)
     }
+    
 }
 
 #---------------------------------------------------------------------------
@@ -1273,6 +1298,11 @@ kda.finish.summarize <- function(res, job) {
 #
 kda.prepare <- function(job) {
     
+    jdir <- file.path(job$folder, "kda")
+    log <- paste0(jdir,"/",job$label,".kda.log")
+    sink(log, append=TRUE, split=TRUE)
+    on.exit(sink(), add = TRUE)
+    
     # Determine minimum hub degree.
     nnodes <- length(job$graph$nodes)
     #if(job$mindegree == "automatic") {
@@ -1453,6 +1483,11 @@ kda.prepare.overlap <- function(graph, direction, rmax) {
 # Written by Ville-Petteri Makinen 2013, Modified by Le Shu 2015
 #
 kda.start <- function(job) {
+    
+    jdir <- file.path(job$folder, "kda")
+    log <- paste0(jdir,"/",job$label,".kda.log")
+    sink(log, append=TRUE, split=TRUE)
+    on.exit(sink(), add = TRUE)
     
     # Import topology.
     edgdata <- kda.start.edges(job)
@@ -1869,6 +1904,12 @@ ssea2kda.analyze <- function(job, moddata) {
 # Written by Ville-Petteri Makinen 2013, Modified by Le Shu 2016, Modified by Jessica Ding 2021
 #
 ssea.analyze <- function(job) {
+    
+    jdir <- file.path(job$folder, "kda")
+    log <- paste0(jdir,"/",job$label,".kda.log")
+    sink(log, append=TRUE, split=TRUE)
+    on.exit(sink(), add = TRUE)
+    
     cat("\nEstimating enrichment...\n")  
     set.seed(job$seed)
     
@@ -1978,8 +2019,7 @@ ssea.analyze.simulate <- function(db, observ, nperm, permtype, trim_start, trim_
         trim_scores[k] <- int[["mean_z"]]
     }
 	cutoff=as.numeric(quantile(trim_scores,probs=c(trim_start,trim_end)))
-	# If trim_start = 0 and trim_end = 1, keep all genes
-	gene_sel=which(trim_scores>=cutoff[1]&trim_scores<=cutoff[2])
+	gene_sel=which(trim_scores>cutoff[1]&trim_scores<cutoff[2])
 	
     # Include only non-empty modules for simulation.
     nmods <- length(db$modulesizes)
@@ -2215,6 +2255,12 @@ ssea.analyze.statistic <- function(o, e) {
 # Written by Ville-Petteri Makinen 2013
 #
 ssea.control <- function(job) {
+    
+    jdir <- file.path(job$folder, "kda")
+    log <- paste0(jdir,"/",job$label,".kda.log")
+    sink(log, append=TRUE, split=TRUE)
+    on.exit(sink(), add = TRUE)
+    
     cat("\nAdding positive controls...\n")
     db <- job$database
     gene2loci <- db$gene2loci
@@ -2332,6 +2378,12 @@ ssea.control <- function(job) {
 # Written by Ville-Petteri Makinen 2013
 #
 ssea.finish <- function(job) {
+    
+    jdir <- file.path(job$folder, "kda")
+    log <- paste0(jdir,"/",job$label,".kda.log")
+    sink(log, append=TRUE, split=TRUE)
+    on.exit(sink(), add = TRUE)
+    
     cat("\nPostprocessing results...\n")
     job <- ssea.finish.fdr(job)
     job <- ssea.finish.genes(job)
@@ -2447,7 +2499,11 @@ ssea.finish.fdr <- function(job, jobs=NULL) {
     }
     
     # Save P-values.
-    jdir <- file.path(job$folder, "msea")
+    if(!is.null(jobs)){
+        jdir <- file.path(job$folder, "meta")
+    } else {
+        jdir <- file.path(job$folder, "msea")
+    }
     fname <- paste(job$label, ".pvalues.txt", sep="")
     tool.save(frame=res, file=fname, directory=jdir)
     
@@ -2505,12 +2561,6 @@ ssea.finish.fdr <- function(job, jobs=NULL) {
                                                    jobs[[i]]$topgenes$MODULE)]
                 na_val <- is.na(combine_res[,paste0(jobs[[i]]$label,".",col)])
                 combine_res[,paste0(jobs[[i]]$label,".",col)][na_val] <- ""
-                # combine_res[,paste0(jobs[[i]]$label,".TOPMARKERS")] = 
-                #     job$topgenes$TOPMARKERS[match(combine_res$MODULE,
-                #                                   job$topgenes$MODULE)]
-                # combine_res[,paste0(jobs[[i]]$label,".TOPVALUES")] = 
-                #     job$topgenes$TOPVALUES[match(combine_res$MODULE,
-                #                                  job$topgenes$MODULE)]
             }
         }
         fname = paste(job$label, ".combined.results.txt", sep="")
@@ -2621,6 +2671,8 @@ ssea.finish.details <- function(job, jobs=NULL) {
     jdir <- file.path(job$folder, "msea")
     fname <- paste(job$label, ".results.txt", sep="")
     job$topgenes <- res[,c("MODULE","TOPGENES","TOPMARKERS","TOPVALUES")]
+    job$resultfile <- file.path(jdir, fname)
+    job$msea_results <- res
     tool.save(frame=res, file=fname, directory=jdir)
     
     return(job)
@@ -2648,6 +2700,16 @@ ssea.meta <- function(jobs, label, folder) {
     meta$modfile <- "undefined"
     meta$genfile <- "undefined"
     meta$marfile <- "undefined"
+    
+    jdir <- file.path(folder, "meta")
+    if(!dir.exists(jdir)) dir.create(path=jdir, recursive=TRUE)
+    if(file.access(jdir, 2) != 0)
+        stop("Cannot access '" + plan$folder + "'.")
+    
+    log <- file(paste0(jdir,"/",label,".meta.log"))
+    sink(log, append=TRUE, split=TRUE)
+    on.exit(sink(), add = TRUE)
+    
     meta <- ssea.start.configure(meta)
     
     # Collect data.
@@ -2871,6 +2933,12 @@ ssea.meta <- function(jobs, label, folder) {
 # Written by Ville-Petteri Makinen 2013
 #
 ssea.prepare <- function(job) {
+    
+    jdir <- file.path(job$folder, "msea")
+    log <- paste0(jdir,"/",job$label,".msea.log")
+    sink(log, append=TRUE, split=TRUE)
+    on.exit(sink(), add = TRUE)
+    
     cat("\nPreparing data structures...\n")
     
     # Remove extreme modules.
@@ -3046,14 +3114,23 @@ ssea.prepare.counts <- function(locdata, NMARKER, quantiles) {
 # Written by Ville-Petteri Makinen 2013, Modified by Le Shu 2015, Modified by Jessica Ding 2021
 #
 ssea.start <- function(plan) {
-    cat("\nMSEA Version:01.04.2016\n")
+    
+    # # Create output folder.
+    # dir.create(path=plan$folder, recursive=FALSE, showWarnings=FALSE)
+    # if(file.access(plan$folder, 2) != 0)
+    #     stop("Cannot access '" + plan$folder + "'.")
+    
+    jdir <- file.path(plan$folder, "msea")
+    if(!dir.exists(jdir)) dir.create(path=jdir, recursive=TRUE)
+    if(file.access(jdir, 2) != 0)
+        stop("Cannot access '" + plan$folder + "'.")
+    
+    log <- file(paste0(jdir,"/",plan$label,".msea.log"))
+    sink(log, append=TRUE, split=TRUE)
+    on.exit(sink(), add = TRUE)
+    cat("\nMSEA Version:12.01.2021\n")
     # Check parameters.
     job <- ssea.start.configure(plan)
-    
-    # Create output folder.
-    dir.create(path=job$folder, recursive=FALSE, showWarnings=FALSE)
-    if(file.access(job$folder, 2) != 0)
-        stop("Cannot access '" + job$folder + "'.")
     
     # Import gene sets.
     cat("\nImporting modules...\n")
