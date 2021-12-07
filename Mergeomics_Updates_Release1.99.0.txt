@@ -32,4 +32,7 @@ Module merging (tool.coalesce)
 
 MSEA significance testing (ssea.analyze.simulate)
 	Allow complete inclusion of all genes in simulation (no trimming)
+
+MSEA, KDA, and Meta-MSEA analysis
+	Add log files (.msea/.kda/.meta.log)
 	
