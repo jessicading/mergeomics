@@ -38,7 +38,7 @@ runMDF <-function(marker_associations,
   
   # change to appropriate headers
   if(edit_files){
-    system(paste0("sed -i \"1s/.*/MARKER\\VALUE/\" ",marker_associations))
+    system(paste0("sed -i \"1s/.*/MARKER\\tVALUE/\" ",marker_associations))
     system(paste0("sed -i \"1s/.*/GENE\\tMARKER/\" ",marker_mapping))
     system(paste0("sed -i \"1s/.*/MARKERa\\tMARKERb\\tWEIGHT/\" ",marker_dependency))
   }
@@ -89,6 +89,7 @@ runMDF <-function(marker_associations,
   job <- list()
   job$marker_associations <- marker_associations
   job$marker_mapping <- marker_mapping
+  job$label <- label
   return(job)
 }
 
@@ -151,15 +152,20 @@ runMSEA <- function(job=NULL,
   if(!is.null(job)){
     marker_associations <- job$marker_associations
     marker_mapping <- job$marker_mapping
+    if(is.null(label)){
+      label <- job$label
+    }
+    job.ssea <- job
+  } else {
+    job.ssea <- list()
   }
   
   if(is.null(label)){
     label = "msea"
-  }
+  } 
   
   ifelse(!dir.exists(output_dir), dir.create(output_dir, recursive = TRUE),FALSE)
   
-  job.ssea <- list()
   job.ssea$marfile <- marker_associations
   if(!is.null(marker_mapping)){
     job.ssea$genfile <- marker_mapping
@@ -189,42 +195,28 @@ runMSEA <- function(job=NULL,
 
 # Meta-MSEA
 # 
-# Finds significantly enriched marker sets from marker associations 
-# (summary statistics of genome-, epigenome-, transcriptome-, proteome-, 
-#  metabolome-wide)
+# Finds consistently enriched marker sets from multiple of the
+# same or different type of omics data
 #
-# @param marker_associations: marker associations file path 
-#                             'MARKER' 'VALUE' headed tab delimited .txt file
-# @param marker_mapping: marker to gene mapping file path. Required for GWAS
-#                        and EWAS. Not needed for TWAS/PWAS
-#                        'GENE' 'MARKER' headed tab delimited .txt file
+# @param msea_input_list: list of lists for each msea/omics datasets of inputs
+#                         and parameters
 # @param marker_set: marker set file path 
 #                    'MODULE' 'GENE' headed tab delimited .txt file
 # @param marker_set_info: marker set info file path (optional)
 #                         'MODULE' 'DESCR' headed tab delimited .txt file
 # @param output_dir: output directory name 
 # @param label: prefix appended to result file names
-# @param permtype: permutation type. automatically set as "marker" if mapping
-#                  file not provide (gene level enrichment analysis, i.e. not GWAS)
-# @param nperm:
-# @param maxoverlap: overlap ratio threshold for merging genes with shared markers. 
-# @param max_module_genes: maximum number of genes for module to be included
-# @param min_module_genes: minimum number of genes for module to be included
-# @param trim: percentile taken from the beginning and end for trimming away a 
-#              defined proportion of genes with significant trait association to 
-#              avoid signal inflation of null background in gene permutation
-# @param seed: seed for random number generator
 # @param return_job: whether to return job list at the end of analysis
 #
-# @return job list with inputs and outputs, if return_job = TRUE. produces result
-#         files, most notably _.results.txt which contains the full results including
-#         top genes, corresponding markers and their association values. full list
-#         of gene contributing to the marker set enrichment is in _.details.txt.
+# @return completed Meta-MSEA job. produces result files for each MSEA
+#         and result files for Meta-MSEEA.
 #
 # @examples
-# runMSEA(marker_associations = "./GWAS/Kunkle_AD.txt",
-#         marker_mapping = "./mapping/Brain_Hippocampus.eQTL.txt", 
-#         marker_set = "./linkage/LD50.1000G.CEU.txt")
+# job.meta <- runMetaMSEA(msea_input_list=list("gwas"=list(marker_associations="Data/Kunkle_AD.MONOCYTES_EQTL/top50.md50.m.txt",
+#                                                          marker_mapping="Data/Kunkle_AD.MONOCYTES_EQTL/top50.md50.g.txt"),
+#                                              "degs"=list(marker_associations="Data/Monocyte_DE_Genes.txt"),
+#                                              "deps"=list(marker_associations="Data/Monocyte_DE_Proteins.txt")),
+#                         marker_set = "genesets/KEGG_Reactome_BioCarta.txt")
 #
 runMetaMSEA <- function(msea_input_list, 
                         marker_set, 
@@ -282,7 +274,13 @@ runMetaMSEA <- function(msea_input_list,
                              label = label, 
                              folder = output_dir)
 
-  if(return_job) return(meta_job_list)
+  if(return_job){
+    return(list(inputs=msea_input_list, 
+                modfile=marker_set,
+                label=label,
+                inffile=marker_set_info,
+                metamsea=meta_job_list))
+  }
 }
 
 # Key Driver Analysis
@@ -294,6 +292,7 @@ runMetaMSEA <- function(msea_input_list,
 # @param MSEA_results: path to MSEA result .txt to extract significant modules for KDA
 #                      ('MODULE' and 'FDR' columns required - _.results.txt file)
 # @param MSEA_fdr_cutoff: FDR cutoff to include modules in the MSEA
+#                         specify multiple for Meta-MSEA - ex. c(0.5,0.5)
 # @param marker_sets: marker sets file path if setting MSEA_results parameter
 # @param merge_modules: whether to merge redundant modules - TRUE or FALSE
 # @param merge_rcutoff: minimum ratio of overlap to merge modules
@@ -331,6 +330,7 @@ runMetaMSEA <- function(msea_input_list,
 runKDA <- function(job=NULL,
                    MSEA_results=NULL,
                    MSEA_fdr_cutoff=0.05,
+                   MetaMSEA_fdr_cutoff=0.05,
                    marker_sets=NULL,
                    merge_modules=FALSE, 
                    merge_rcutoff=.33,
@@ -358,10 +358,14 @@ runKDA <- function(job=NULL,
   job.kda$folder <- output_dir
   if(is.null(label)){
     if(!is.null(job)){
-      if(label=="msea"){
-        label <- "wKDA"
+      if(!is.null(job$label)){
+        if(job$label=="msea" | job$label=="meta"){
+          label <- "wKDA"
+        } else {
+          label <- job$label
+        }
       } else {
-        label <- job$label
+        label <- "wKDA"
       }
     } else {
       label <- "wKDA"
@@ -379,10 +383,34 @@ runKDA <- function(job=NULL,
     }
   } else {
     if(!is.null(job)){
+      if(class(job[[1]])=="list"){ # job from meta-MSEA
+        meta <- TRUE
+        results <- job$metamsea$combined_results
+        FDR_cols <- grep(".FDR",colnames(results), value = TRUE, fixed = TRUE)
+        FDR_cols <- FDR_cols[FDR_cols!="META.FDR"]
+        if(length(FDR_cols)!=length(MSEA_fdr_cutoff)){
+          stop("Length of MSEA_fdr_cutoff must be same as number of MSEAs")
+        }
+        for(iter in 1:length(FDR_cols)){
+          results <- results[results[,FDR_cols[iter]]<MSEA_fdr_cutoff[iter],]
+        }
+        results <- results[results$MODULE!="_ctrlA",]
+        results <- results[results$MODULE!="_ctrlB",]
+        if(nrow(results)==0) stop("No more modules after filtering for individual msea cutoffs.")
+        resultfile <- paste0(job$metamsea$folder,"/meta/",job$metamsea$label,".filtered.results.txt")
+        write.table(results, 
+                    resultfile,
+                    quote = FALSE, sep = "\t", row.names = FALSE)
+        MSEA_results <- resultfile
+      } else {
+        MSEA_results <- job$resultfile
+        job.kda$msea_results <- job$msea_results
+      }
       marker_set_file <- job$modfile
-      MSEA_results <- job$resultfile
       marker_set_info_file <- job$inffile
-      job.kda$msea_results <- job$msea_results
+      
+    } else {
+      meta <- FALSE
     }
     
     if(is.null(marker_set_file)) stop("Marker set needed!")
@@ -391,7 +419,11 @@ runKDA <- function(job=NULL,
     
     if(!is.null(MSEA_results)){
       result <- read.delim(MSEA_results, stringsAsFactors = FALSE)
-      modules = result$MODULE[result$FDR<MSEA_fdr_cutoff]
+      if(meta){
+        modules = result$MODULE[result$META.FDR<MetaMSEA_fdr_cutoff]
+      } else {
+        modules = result$MODULE[result$FDR<MSEA_fdr_cutoff]
+      }
       modules = modules[modules!="_ctrlA"]
       modules = modules[modules!="_ctrlB"]
       if(length(modules)==0){
@@ -422,11 +454,11 @@ runKDA <- function(job=NULL,
       dir.create("merged_modules")
       merge_modules(msea_res = modfile$MODULE, 
                     rcutoff = merge_rcutoff, 
-                    output_Dir = "merged_modules/", 
+                    output_dir = "merged_modules/", 
                     label = label,
                     modfile_path = marker_set_file, 
                     infofile_path = marker_set_info_file)
-      job.kda$modfile <- paste0("merged_modules/",label,".merged_mod.txt")
+      job.kda$modfile <- paste0("merged_modules/merged_",label,".mod.txt")
       
     } else {
       dir.create("temp")
@@ -474,7 +506,6 @@ runKDA <- function(job=NULL,
   }
   
   job.kda <- kda2cytoscape(job.kda, ndrivers = nKDs_subnetwork)
-  job.kda <- kda2cytoscape(job.kda)
   
   if(return_job) return(job.kda)
   
