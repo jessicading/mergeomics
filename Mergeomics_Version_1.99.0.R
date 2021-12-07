@@ -1905,8 +1905,8 @@ ssea2kda.analyze <- function(job, moddata) {
 #
 ssea.analyze <- function(job) {
     
-    jdir <- file.path(job$folder, "kda")
-    log <- paste0(jdir,"/",job$label,".kda.log")
+    jdir <- file.path(job$folder, "msea")
+    log <- paste0(jdir,"/",job$label,".msea.log")
     sink(log, append=TRUE, split=TRUE)
     on.exit(sink(), add = TRUE)
     
@@ -2256,8 +2256,8 @@ ssea.analyze.statistic <- function(o, e) {
 #
 ssea.control <- function(job) {
     
-    jdir <- file.path(job$folder, "kda")
-    log <- paste0(jdir,"/",job$label,".kda.log")
+    jdir <- file.path(job$folder, "msea")
+    log <- paste0(jdir,"/",job$label,".msea.log")
     sink(log, append=TRUE, split=TRUE)
     on.exit(sink(), add = TRUE)
     
@@ -2379,8 +2379,8 @@ ssea.control <- function(job) {
 #
 ssea.finish <- function(job) {
     
-    jdir <- file.path(job$folder, "kda")
-    log <- paste0(jdir,"/",job$label,".kda.log")
+    jdir <- file.path(job$folder, "msea")
+    log <- paste0(jdir,"/",job$label,".msea.log")
     sink(log, append=TRUE, split=TRUE)
     on.exit(sink(), add = TRUE)
     
@@ -2564,6 +2564,7 @@ ssea.finish.fdr <- function(job, jobs=NULL) {
             }
         }
         fname = paste(job$label, ".combined.results.txt", sep="")
+        job$combined_results <- combine_res
         tool.save(frame=combine_res, file=fname, directory=jdir)
     }
     return(job)
