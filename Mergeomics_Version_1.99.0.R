@@ -493,54 +493,89 @@ depth=1) {
     kd_res$NODE <- job$graph$nodes[kd_res$NODE]
     kd_res <- kd_res[kd_res$FDR<0.05,]
     
-    # list modules KD is a KD for
-    cat(noddata$NODE[44])
-    noddata$KD_MODULE <- vapply(noddata$NODE, function(x){
+    kd_info = t(vapply(noddata$NODE, function(x){
+        info <- c()
         if(x %in% kd_res$NODE){
-            return(do.call("paste",
-                           c(as.list(kd_res$MODULE[kd_res$NODE==x]),
-                                     list("sep"=","))))
-        } else{
-            return("Not a KD")
-        }
-    }, "character")
-    # get module for which the gene is the most significant KD for
-    noddata$KD_TOP_MODULE <- vapply(noddata$NODE, function(x){
-        if(x %in% kd_res$NODE){
-            # find top module
-            kdres <- kd_res[kd_res$NODE==x,]
-            return(do.call("paste",c(kdres$MODULE[which(min(kdres$P)==kdres$P)],
-                                     list("sep"=","))))
-        } else{
-            return("Not a KD")
-        }
-    }, "character")
-    # KD border color based on top module it regulates
-    noddata$KD_BORDER_COLOR <- vapply(noddata$NODE, function(x){
-        if(x %in% drivers$NODNAMES){
-            # find top module
-            kdres <- drivers[drivers$NODNAMES==x,]
-            top_col <- kdres$COLOR[which(min(kdres$FDR)==kdres$FDR)]
-            if(length(top_col)>1) top_col = top_col[1]
-            return(top_col)
-        } else if(x %in% kd_res$NODE){
+            # KD_MODULE
+            info <- c(info, 
+                      do.call("paste",
+                                    c(as.list(kd_res$MODULE[kd_res$NODE==x]),
+                                      list("sep"=","))))
+            # KD_TOP_MODULE
             kdres <- kd_res[kd_res$NODE==x,]
             top_mod <- kdres$MODULE[which(min(kdres$P)==kdres$P)]
+            info <- c(info, 
+                      do.call("paste",c(kdres$MODULE[which(min(kdres$P)==kdres$P)],
+                                              list("sep"=","))))
+            # KD_BORDER_COLOR
             if(length(top_mod)>1) top_mod = top_mod[1]
-            return(instr$COLOR[instr$MODULES==top_mod])
+            info <- c(info, instr$COLOR[instr$MODULES==top_mod])
+            
+            # KD_subnetwork_shown
+            if(x %in% drivers$NODNAMES){
+                info <- c(info, "YES")
+            } else {
+                info <- c(info, "NO")
+            }
+            
+            return(info)
+            
         } else{
-            return("Not a KD")
+            return(rep("Not a KD", 4))
         }
-    }, "character")
-    noddata$KD_subnetwork_shown <- vapply(noddata$NODE, function(x){
-        if(x %in% drivers$NODNAMES){
-            return("YES")
-        } else if(x %in% kd_res$NODE){
-            return("NO")
-        } else{
-            return("Not a KD")
-        }
-    }, "character")
+    }, FUN.VALUE = character(4)))
+    
+    colnames(kd_info) <- c("KD_MODULE","KD_TOP_MODULE",
+                           "KD_BORDER_COLOR","KD_subnetwork_shown")
+    noddata <- cbind(noddata, kd_info)
+    
+    # # list modules KD is a KD for
+    # noddata$KD_MODULE <- vapply(noddata$NODE, function(x){
+    #     if(x %in% kd_res$NODE){
+    #         return(do.call("paste",
+    #                        c(as.list(kd_res$MODULE[kd_res$NODE==x]),
+    #                                  list("sep"=","))))
+    #     } else{
+    #         return("Not a KD")
+    #     }
+    # }, "character")
+    # # get module for which the gene is the most significant KD for
+    # noddata$KD_TOP_MODULE <- vapply(noddata$NODE, function(x){
+    #     if(x %in% kd_res$NODE){
+    #         # find top module
+    #         kdres <- kd_res[kd_res$NODE==x,]
+    #         return(do.call("paste",c(kdres$MODULE[which(min(kdres$P)==kdres$P)],
+    #                                  list("sep"=","))))
+    #     } else{
+    #         return("Not a KD")
+    #     }
+    # }, "character")
+    # # KD border color based on top module it regulates
+    # noddata$KD_BORDER_COLOR <- vapply(noddata$NODE, function(x){
+    #     if(x %in% drivers$NODNAMES){
+    #         # find top module
+    #         kdres <- drivers[drivers$NODNAMES==x,]
+    #         top_col <- kdres$COLOR[which(min(kdres$FDR)==kdres$FDR)]
+    #         if(length(top_col)>1) top_col = top_col[1]
+    #         return(top_col)
+    #     } else if(x %in% kd_res$NODE){
+    #         kdres <- kd_res[kd_res$NODE==x,]
+    #         top_mod <- kdres$MODULE[which(min(kdres$P)==kdres$P)]
+    #         if(length(top_mod)>1) top_mod = top_mod[1]
+    #         return(instr$COLOR[instr$MODULES==top_mod])
+    #     } else{
+    #         return("Not a KD")
+    #     }
+    # }, "character")
+    # noddata$KD_subnetwork_shown <- vapply(noddata$NODE, function(x){
+    #     if(x %in% drivers$NODNAMES){
+    #         return("YES")
+    #     } else if(x %in% kd_res$NODE){
+    #         return("NO")
+    #     } else{
+    #         return("Not a KD")
+    #     }
+    # }, "character")
     
     modmember_nonkd <- which(noddata$URL!="" & noddata$SHAPE!="Diamond")
     noddata$SIZE[modmember_nonkd] <- 100
@@ -826,11 +861,6 @@ kda2cytoscape.identify <- function(dat, varname, labels) {
 kda.analyze <- function(job) {
     set.seed(job$seed)
     
-    jdir <- file.path(job$folder, "kda")
-    log <- paste0(jdir,"/",job$label,".kda.log")
-    sink(log, append=TRUE, split=TRUE)
-    on.exit(sink(), add = TRUE)
-    
     cat("\nAnalyzing network...\n")
     nmods <- length(job$modules)
     
@@ -1031,10 +1061,6 @@ kda.configure <- function(plan) {
     if(file.access(jdir, 2) != 0)
         stop("Cannot access '" + plan$folder + "'.")
     
-    log <- file(paste0(jdir,"/",plan$label,".kda.log"))
-    sink(log, append=TRUE, split=TRUE)
-    on.exit(sink(), add = TRUE)
-    
     cat("\nKDA Version:12.01.2021\n")
     cat("\nParameters:\n")
     plan$stamp <- Sys.time()
@@ -1088,11 +1114,6 @@ kda.configure <- function(plan) {
 #
 kda.finish <- function(job) {
     
-    jdir <- file.path(job$folder, "kda")
-    log <- paste0(jdir,"/",job$label,".kda.log")
-    sink(log, append=TRUE, split=TRUE)
-    on.exit(sink(), add = TRUE)
-    
     cat("\nFinishing results...\n")
     if (nrow(job$results)==0){
         cat("No Key Driver Found!!!!")
@@ -1110,6 +1131,9 @@ kda.finish <- function(job) {
         
         # Create a summary file of top hits.
         res <- kda.finish.summarize(res, job)
+        
+        # Create a inputs and parameters file
+        job <- kda.finish.param(job)
             
         return(job)
     }
@@ -1155,6 +1179,41 @@ kda.finish.estimate <- function(job) {
     res$FILL <- (res$N.obsrv)/(res$N.neigh + 1e-20)
     res$FOLD <- (res$N.obsrv)/(res$N.expct + 1e-20)
     return(res)
+}
+
+#---------------------------------------------------------------------------
+
+kda.finish.param <- function(job) {
+    inputs <- data.frame("Input or parameter" = c("Network file",
+                                                  "Marker set file",
+                                                  "Search depth",
+                                                  "Search direction",
+                                                  "Maximum overlap",
+                                                  "Minimum module size",
+                                                  "Minimum degree",
+                                                  "Maximum degree",
+                                                  "Edge factor",
+                                                  "Number of permutations",
+                                                  "Random seed"
+                                                  ),
+                        "Value" = c(basename(job$netfile),
+                                    basename(job$modfile),
+                                    job$depth,
+                                    job$direction,
+                                    job$maxoverlap,
+                                    job$minsize,
+                                    job$mindegree,
+                                    job$maxdegree,
+                                    job$edgefactor,
+                                    job$nperm,
+                                    job$seed), 
+                         check.names = FALSE)
+    
+    jdir <- file.path(job$folder, "kda")
+    fname <- paste(job$label, ".param.txt", sep="")
+    tool.save(frame=inputs, file=fname, directory=jdir)
+    
+    return(job)
 }
 
 #---------------------------------------------------------------------------
@@ -1297,11 +1356,6 @@ kda.finish.summarize <- function(res, job) {
 # Written by Ville-Petteri Makinen 2013, Modified by Le Shu 2015
 #
 kda.prepare <- function(job) {
-    
-    jdir <- file.path(job$folder, "kda")
-    log <- paste0(jdir,"/",job$label,".kda.log")
-    sink(log, append=TRUE, split=TRUE)
-    on.exit(sink(), add = TRUE)
     
     # Determine minimum hub degree.
     nnodes <- length(job$graph$nodes)
@@ -1483,11 +1537,6 @@ kda.prepare.overlap <- function(graph, direction, rmax) {
 # Written by Ville-Petteri Makinen 2013, Modified by Le Shu 2015
 #
 kda.start <- function(job) {
-    
-    jdir <- file.path(job$folder, "kda")
-    log <- paste0(jdir,"/",job$label,".kda.log")
-    sink(log, append=TRUE, split=TRUE)
-    on.exit(sink(), add = TRUE)
     
     # Import topology.
     edgdata <- kda.start.edges(job)
@@ -1905,11 +1954,6 @@ ssea2kda.analyze <- function(job, moddata) {
 #
 ssea.analyze <- function(job) {
     
-    jdir <- file.path(job$folder, "msea")
-    log <- paste0(jdir,"/",job$label,".msea.log")
-    sink(log, append=TRUE, split=TRUE)
-    on.exit(sink(), add = TRUE)
-    
     cat("\nEstimating enrichment...\n")  
     set.seed(job$seed)
     
@@ -2256,11 +2300,6 @@ ssea.analyze.statistic <- function(o, e) {
 #
 ssea.control <- function(job) {
     
-    jdir <- file.path(job$folder, "msea")
-    log <- paste0(jdir,"/",job$label,".msea.log")
-    sink(log, append=TRUE, split=TRUE)
-    on.exit(sink(), add = TRUE)
-    
     cat("\nAdding positive controls...\n")
     db <- job$database
     gene2loci <- db$gene2loci
@@ -2378,16 +2417,11 @@ ssea.control <- function(job) {
 # Written by Ville-Petteri Makinen 2013
 #
 ssea.finish <- function(job) {
-    
-    jdir <- file.path(job$folder, "msea")
-    log <- paste0(jdir,"/",job$label,".msea.log")
-    sink(log, append=TRUE, split=TRUE)
-    on.exit(sink(), add = TRUE)
-    
     cat("\nPostprocessing results...\n")
     job <- ssea.finish.fdr(job)
     job <- ssea.finish.genes(job)
     job <- ssea.finish.details(job)
+    job <- ssea.finish.param(job)
     return(job)
 }
 
@@ -2640,8 +2674,6 @@ ssea.finish.details <- function(job, jobs=NULL) {
     # Add top five genes, markers, values details to result file
     # Restore module names.
     res$MODULE <- job$modules[res$MODULE]
-    res <- job$results
-    res$MODULE <- job$modules[res$MODULE]
     res$TOPGENES <- ""
     res$TOPMARKERS <- ""
     res$TOPVALUES <- ""
@@ -2678,6 +2710,42 @@ ssea.finish.details <- function(job, jobs=NULL) {
     
     return(job)
 }
+
+ssea.finish.param <- function(job) {
+    inputs <- data.frame("Input or parameter" = c("Marker association file",
+                                                  "Marker mapping file",
+                                                  "Marker set file",
+                                                  "Permutation type",
+                                                  "Number of permutations",
+                                                  "Random seed",
+                                                  "Trim",
+                                                  "Minimum gene count",
+                                                  "Maximum gene count",
+                                                  "Maximum overlap between genes"
+                                                  ),
+                         "Value" = c(basename(job$marfile),
+                                     ifelse(is.null(job$genfile),
+                                            NA, basename(job$genfile)),
+                                     basename(job$modfile),
+                                     job$permtype,
+                                     job$nperm,
+                                     job$seed,
+                                     job$trim,
+                                     job$mingenes,
+                                     job$maxgenes,
+                                     job$maxoverlap
+                                     ), check.names = FALSE)
+    
+    
+    # Save contents.
+    jdir <- file.path(job$folder, "msea")
+    fname <- paste(job$label, ".param.txt", sep="")
+    tool.save(frame=inputs, file=fname, directory=jdir)
+    
+    return(job)
+}
+
+
 #
 # Merge multiple MSEA results into meta MSEA.
 #
@@ -2706,10 +2774,6 @@ ssea.meta <- function(jobs, label, folder) {
     if(!dir.exists(jdir)) dir.create(path=jdir, recursive=TRUE)
     if(file.access(jdir, 2) != 0)
         stop("Cannot access '" + plan$folder + "'.")
-    
-    log <- file(paste0(jdir,"/",label,".meta.log"))
-    sink(log, append=TRUE, split=TRUE)
-    on.exit(sink(), add = TRUE)
     
     meta <- ssea.start.configure(meta)
     
@@ -2935,11 +2999,6 @@ ssea.meta <- function(jobs, label, folder) {
 #
 ssea.prepare <- function(job) {
     
-    jdir <- file.path(job$folder, "msea")
-    log <- paste0(jdir,"/",job$label,".msea.log")
-    sink(log, append=TRUE, split=TRUE)
-    on.exit(sink(), add = TRUE)
-    
     cat("\nPreparing data structures...\n")
     
     # Remove extreme modules.
@@ -3126,9 +3185,6 @@ ssea.start <- function(plan) {
     if(file.access(jdir, 2) != 0)
         stop("Cannot access '" + plan$folder + "'.")
     
-    log <- file(paste0(jdir,"/",plan$label,".msea.log"))
-    sink(log, append=TRUE, split=TRUE)
-    on.exit(sink(), add = TRUE)
     cat("\nMSEA Version:12.01.2021\n")
     # Check parameters.
     job <- ssea.start.configure(plan)
