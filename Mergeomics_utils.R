@@ -374,6 +374,7 @@ runKDA <- function(job=NULL,
   
   if(!is.null(nodes)){
     if(length(nodes)>1){ # if vector of nodes/genes
+      if(!dir.exists("temp")) dir.create("temp")
       modfile <- data.frame("MODULE"="Input nodes",
                             "NODE"=nodes)
       write.table(modfile, "temp/nodes_file_forKDA.txt", row.names = FALSE, quote = FALSE, sep = "\t")
