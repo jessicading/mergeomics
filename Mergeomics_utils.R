@@ -404,6 +404,7 @@ runKDA <- function(job=NULL,
                     quote = FALSE, sep = "\t", row.names = FALSE)
         MSEA_results <- resultfile
       } else {
+        meta <- FALSE
         MSEA_results <- job$resultfile
         job.kda$msea_results <- job$msea_results
       }
