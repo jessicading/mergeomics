@@ -89,7 +89,7 @@ runMDF <-function(marker_associations,
   job <- list()
   job$marker_associations <- marker_associations
   job$marker_mapping <- marker_mapping
-  job$label <- label
+  job$label <- basename(label)
   return(job)
 }
 
