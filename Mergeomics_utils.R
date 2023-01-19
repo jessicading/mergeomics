@@ -579,7 +579,18 @@ merge_modules <- function(msea_res,
       names(merged_modules) <- unique(moddata$MODULE)
       for(iter in 1:nrow(addBack)){
         # get module name from merged
-        mod <- names(merged_modules)[grepl(unlist(strsplit(addBack$Module[iter], split = ", "))[1], merged_modules)]
+        first_match = unlist(strsplit(addBack$Module[iter], split = ", "))[1]
+        mod <- names(merged_modules)[grepl(first_match, 
+                                           merged_modules)]
+        if(length(mod)>1){
+          for(set in mod){
+            submods = unlist(strsplit(merged_modules[[set]], split = ","))
+            if(first_match %in% submods){
+              mod <- set
+              break
+            }
+          }
+        }
         temp <- data.frame("MODULE"=mod, 
                            "GENE"=addBack$GENE[iter], 
                            "OVERLAP"=merged_modules[names(merged_modules)==mod],
