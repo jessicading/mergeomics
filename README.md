@@ -459,21 +459,21 @@ options(stringsAsFactors = FALSE)
 
 # minimum inputs. msea_res can be a vector of module names or the ".results.txt" result file from MSEA
 merge_modules(msea_res="sample_inputs/Sample_Meta.MSEA_modules_full_result.txt", 
-              modfile_path = "sample_inputs/Kegg1.txt,
+              modfile_path = "sample_inputs/Kegg.txt, # MODULE GENE file
 	      fdr_cutoff = 0.01) # not required input but highly recommended for downstream analysis with KDA
 # OR using a vector of modules
 res <- read.delim("sample_inputs/Sample_Meta.MSEA_modules_full_result.txt)
 sig_mods <- res$MODULE[res$FDR<0.01]
 merge_modules(msea_res=sig_mods, 
-              modfile_path = "sample_inputs/Kegg1.txt")
+              modfile_path = "sample_inputs/Kegg.txt")
 	      
 # All parameters set
 merge_modules(msea_res="~/Downloads/Meta_MSEA_TTK1A14P1X/Sample_Meta.MSEA_modules_full_result.txt", 
-              rmax = 0.33, # this is the default value
-              modfile_path = "sample_inputs/Kegg1.txt",
+              rcutoff = 0.33, # this is the default value
               label = "Psoriasis", 
-	            fdr_cutoff = 0.01, 
-	            output_Dir = "Merged/", 
+	      fdr_cutoff = 0.01, 
+	      output_dir="Merged_modules/", 
+	      modfile_path = "sample_inputs/Kegg.txt",
               infofile_path = "sample_inputs/KEGG_info.txt")
 
 ```
