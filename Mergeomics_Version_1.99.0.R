@@ -1453,6 +1453,7 @@ kda.prepare.overlap <- function(graph, direction, rmax) {
     # Determine node strengths.
     nnodes <- length(graph$nodes)
     stren <- rep(0.0, nnodes)
+    
     if(direction <= 0) stren <- (stren + graph$outstats$STRENG)
     if(direction >= 0) stren <- (stren + graph$instats$STRENG)
     
@@ -1472,7 +1473,7 @@ kda.prepare.overlap <- function(graph, direction, rmax) {
             stamp <- Sys.time()
         }
         
-        # Neibhgorhood topology.
+        # Neighborhood topology.
         g <- hubnets[[key]]
         neighbors <- g$RANK
         locals <- intersect(neighbors, hubs)
@@ -4453,6 +4454,9 @@ tool.subgraph.stats <- function(frame, edgemap, heads, weights) {
         wsums[rows] <- (wsums[rows] + weights[edges])
     }
     frame$DEGREE <- wcounts
+    # if weights are all the same, return flat weights
+    # instead of weights determined by node degree
+    if(sd(weights)==0) wsums <- rep(1, length(wcounts))
     frame$STRENG <- wsums
     return(frame)
 }
