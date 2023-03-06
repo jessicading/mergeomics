@@ -3007,6 +3007,7 @@ ssea.prepare <- function(job) {
     mask <- which((st$lengths >= job$mingenes) & (st$lengths <= job$maxgenes))
     pos <- match(job$moddata$MODULE, st$labels[mask])
     job$moddata <- job$moddata[which(pos > 0),]
+    if(nrow(job$moddata)==0) stop("No modules passing mingenes and maxgenes.")
     
     # Construct hierarchical representation.
     ngens <- length(job$genes) 
