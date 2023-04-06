@@ -2484,7 +2484,9 @@ ssea.finish.fdr <- function(job, jobs=NULL) {
     }
     
     # Estimate false discovery rates.
-    res$FDR <- tool.fdr(res$P)
+    # Find number of modules that made it into the analysis.
+    nmods <- length(unique(job$moddata$MODULE)) - 2 # minus 2 for ctrls
+    res$FDR <- tool.fdr(res$P, nmods=nmods)
     # Merge with module info.
     res <- merge(res, job$modinfo, all.x=TRUE)
     # Sort according to significance.
@@ -2655,6 +2657,28 @@ ssea.finish.details <- function(job, jobs=NULL) {
     dtl$MARKER <- job$loci[dtl$MARKER]
     dtl <- dtl[,c("MODULE", "FDR", "GENE", "NMARKER", "MARKER", "VALUE", 
     "DESCR")]
+    
+    # subset dtl to only module members
+    moddata <- read.delim(job$modfile)
+    mod_order <- unique(dtl$MODULE)
+    comma <- dtl[grepl(",",dtl$GENE) & !grepl("_ctrlA|_ctrlB",dtl$MODULE),]
+    dtl <- dtl[!(grepl(",",dtl$GENE) & !grepl("_ctrlA|_ctrlB",dtl$MODULE)),]
+
+    addBack <- do.call("rbind", c(apply(comma, 1, function(x){
+      genes <- unlist(strsplit(x["GENE"], split = ","))
+      genes <- genes[genes %in% moddata$GENE[moddata$MODULE==x["MODULE"]]]
+      return(data.frame("MODULE"=x["MODULE"],
+                        "FDR"=as.numeric(x["FDR"]),
+                        "GENE"=genes,
+                        "NMARKER"=as.numeric(x["NMARKER"]),
+                        "MARKER"=x["MARKER"],
+                        "VALUE"=as.numeric(x["VALUE"]),
+                        "DESCR"=x["DESCR"]))
+    })))
+    
+    dtl <- rbind(dtl, addBack)
+    dtl <- dtl[order(dtl$VALUE, decreasing = TRUE),]
+    dtl <- dtl[order(match(dtl$MODULE, mod_order)),]
     
     # Make numbers look nicer.
     values <- character()
@@ -3005,6 +3029,7 @@ ssea.prepare <- function(job) {
     # Remove extreme modules.
     st <- tool.aggregate(job$moddata$MODULE)
     mask <- which((st$lengths >= job$mingenes) & (st$lengths <= job$maxgenes))
+    removed <- setdiff(st$labels, mask)
     pos <- match(job$moddata$MODULE, st$labels[mask])
     job$moddata <- job$moddata[which(pos > 0),]
     if(nrow(job$moddata)==0) stop("No modules passing mingenes and maxgenes.")
@@ -3856,7 +3881,7 @@ tool.coalesce.merge <- function(data, ncore) {
 
 #---------------------------------------------------------------------------
 
-tool.cochranQ<-function(x, weights) {
+tool.cochranQ <-function(x, weights) {
     bar.x <- sum(weights*x)/sum(weights)
     Q <- sum(weights*((x-bar.x)^2))
     k <- length(x)
@@ -3869,10 +3894,17 @@ tool.cochranQ<-function(x, weights) {
 # 
 # Written by Ville-Petteri Makinen 2013
 #
-tool.fdr <- function(p, f=NULL) {
-    if(length(p) < 5) return(NA*p)
-    if(is.null(f)) return(tool.fdr.bh(p))
-    return(tool.fdr.empirical(p, f))
+tool.fdr <- function(p, nmods=NULL) {
+    if(length(p) < 12){
+      cat("WARNING! Number of pathways analyzed less than 10,\n")
+      cat("running Bonferroni FDR correction.\n")
+      fdrs <- p*nmods # bonferroni correction
+      fdrs[fdrs>1] <- 1 # cap fdr at 1
+      return(fdrs) 
+    } else {
+      return(tool.fdr.bh(p))
+    }
+    #return(tool.fdr.empirical(p, f))
 }
 
 #---------------------------------------------------------------------------
